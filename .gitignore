@@ -1,0 +1,57 @@
+# API anahtarları — asla commit'lenmemeli. Örnek için .env.example kullanın.
+.env
+
+# Claude Code'un makineye özel yerel ayarları. İçinde gerçek kimlik bilgisi
+# bulunabilir (ör. `SUPABASE_ACCESS_TOKEN=sbp_...` izin kaydı) — asla
+# commit'lenmemeli. Paylaşılan ayarlar için `.claude/settings.json` kullanın.
+.claude/settings.local.json
+
+# Supabase CLI yerel önbelleği (project ref, pooler URL vb. — sır değil ama
+# makineye özel, commit'lenmesine gerek yok).
+supabase/.temp/
+
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
