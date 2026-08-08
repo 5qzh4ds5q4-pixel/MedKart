@@ -93,7 +93,13 @@ class TopicScanService {
         'responseSchema': _responseSchema,
         'temperature': 0.2,
         'maxOutputTokens': 4096,
-        if (_thinkingBudget != null)
+        // GeminiService.model desteklemiyorsa (ör. gemini-3.5-flash-lite,
+        // bkz. GeminiService.supportsThinkingConfig doc yorumu — 400
+        // INVALID_ARGUMENT döner) thinkingConfig hiç eklenmez. Aynı kararı
+        // burada tekrar yazmak yerine tek kaynak olan o statik fonksiyona
+        // devrediyoruz.
+        if (_thinkingBudget != null &&
+            GeminiService.supportsThinkingConfig(GeminiService.model))
           'thinkingConfig': {'thinkingBudget': _thinkingBudget},
       },
     });

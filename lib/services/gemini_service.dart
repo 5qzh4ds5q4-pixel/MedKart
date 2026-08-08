@@ -28,8 +28,23 @@ class GeminiService implements FlashcardGenerator {
   /// thinking'e dönmek isteyen çağıran açıkça `thinkingBudget: null` versin.
   final int? _thinkingBudget;
 
-  Map<String, dynamic>? get _thinkingConfig =>
-      _thinkingBudget == null ? null : {'thinkingBudget': _thinkingBudget};
+  /// `gemini-3.5-flash-lite` `generationConfig.thinkingConfig`'i HİÇ KABUL
+  /// ETMİYOR — canlı doğrulandı (2026-08-07, `ai-proxy` üzerinden izole
+  /// testlerle): bu alan TEK BAŞINA (responseSchema/responseMimeType hiç
+  /// yokken bile) gönderilince 400 `INVALID_ARGUMENT` dönüyor. Diğer
+  /// modeller (ör. varsayılan `gemini-3.5-flash`) etkilenmedi, davranış
+  /// AYNI kaldı.
+  ///
+  /// PUBLIC + static tutuluyor ki [model]'in o anki derleme-zamanı sabit
+  /// değerinden bağımsız, testler her iki dalı da (`flash-lite` ve diğerleri)
+  /// doğrudan doğrulayabilsin — bkz. `test/gemini_service_test.dart`.
+  static bool supportsThinkingConfig(String model) =>
+      model != 'gemini-3.5-flash-lite';
+
+  Map<String, dynamic>? get _thinkingConfig {
+    if (!supportsThinkingConfig(model)) return null;
+    return _thinkingBudget == null ? null : {'thinkingBudget': _thinkingBudget};
+  }
 
   /// Model değiştirmek için tek yer burası.
   ///
@@ -37,6 +52,12 @@ class GeminiService implements FlashcardGenerator {
   /// Anahtarınızın erişebildiği modelleri görmek için:
   /// GET https://generativelanguage.googleapis.com/v1beta/models
   // MODEL TESTİ: gemini-3.5-flash / gemini-2.5-flash / gemini-2.5-flash-lite arasında değiştir
+  // ┌────────────────────────────────────────────────────────────────────┐
+  // │ GEÇİCİ — 2026-08-07: kullanıcının isteğiyle 'gemini-3.5-flash'e     │
+  // │ GERİ ALINDI (flash-lite testi bitti). flash-lite denemek istersen   │
+  // │ 'gemini-3.5-flash-lite' yap — thinkingConfig artık otomatik atlanır │
+  // │ (bkz. supportsThinkingConfig), 400 hatası bir daha çıkmaz.          │
+  // └────────────────────────────────────────────────────────────────────┘
   static const String model = 'gemini-3.5-flash';
 
   /// Tek seferde gönderilebilecek not uzunluğu. Aşırı uzun metinleri API'ye

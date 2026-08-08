@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medcard/models/pdf_page.dart';
+import 'package:medcard/services/gemini_service.dart';
 import 'package:medcard/services/topic_scan_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -171,4 +172,47 @@ void main() {
       ('İkinci Blok', 151, 200),
     ]);
   });
+
+  test(
+    'aktif model thinkingConfig desteklemiyorsa (GeminiService.model, bkz. '
+    'GeminiService.supportsThinkingConfig) payload\'da thinkingConfig HİÇ '
+    'olmuyor, destekleniyorsa gönderiliyor',
+    () async {
+      http.Request? captured;
+      final service = TopicScanService(
+        client: MockClient((req) async {
+          captured = req;
+          return http.Response(
+            _envelope(
+              jsonEncode([
+                {'konu': 'Kemik Doku', 'ilkSayfa': 1, 'sonSayfa': 3},
+              ]),
+            ),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      await service.scan(_pages(3));
+
+      // Transport gövdeyi Edge Function zarfına ('payload' altına) sarıyor.
+      final body =
+          (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
+              as Map<String, dynamic>;
+      final generationConfig =
+          body['generationConfig'] as Map<String, dynamic>;
+
+      // GeminiService.model'in O ANKİ değerine göre iki dalı da doğrular —
+      // aynı mantık gemini_service_test.dart'taki eşdeğer testte de var,
+      // burada topic_scan_service'in kendi generationConfig'inin de
+      // GeminiService.supportsThinkingConfig'e gerçekten UYDUĞUNU (kopyalayıp
+      // kendi kararını vermediğini) doğruluyoruz.
+      if (GeminiService.supportsThinkingConfig(GeminiService.model)) {
+        expect(generationConfig.containsKey('thinkingConfig'), isTrue);
+      } else {
+        expect(generationConfig.containsKey('thinkingConfig'), isFalse);
+      }
+    },
+  );
 }

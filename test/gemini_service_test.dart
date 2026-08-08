@@ -141,31 +141,42 @@ void main() {
     expect(cards.every((c) => c.cardType == CardType.temel), isTrue);
   });
 
-  test('varsayılanda thinking kapalı gönderilir (thinkingBudget: 0)', () async {
-    http.Request? captured;
-    final service = GeminiService(
-      client: MockClient((req) async {
-        captured = req;
-        return http.Response(
-          _geminiEnvelope(
-            jsonEncode([
-              {'soru': 'S', 'cevap': 'C', 'zorluk': 'orta', 'konu': 'x'},
-            ]),
-          ),
-          200,
-        );
-      }),
-    );
+  test(
+    'varsayılanda thinking ayarı AKTİF MODELİN thinkingConfig desteğine göre '
+    'gönderilir/atlanır (thinkingBudget: 0)',
+    () async {
+      http.Request? captured;
+      final service = GeminiService(
+        client: MockClient((req) async {
+          captured = req;
+          return http.Response(
+            _geminiEnvelope(
+              jsonEncode([
+                {'soru': 'S', 'cevap': 'C', 'zorluk': 'orta', 'konu': 'x'},
+              ]),
+            ),
+            200,
+          );
+        }),
+      );
 
-    await service.generate(_validInput);
+      await service.generate(_validInput);
 
-    // Transport artık gövdeyi Edge Function zarfına ('payload' altına) sarıyor.
-    final body =
-        (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
-            as Map<String, dynamic>;
-    final generationConfig = body['generationConfig'] as Map<String, dynamic>;
-    expect(generationConfig['thinkingConfig'], {'thinkingBudget': 0});
-  });
+      // Transport artık gövdeyi Edge Function zarfına ('payload' altına) sarıyor.
+      final body =
+          (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
+              as Map<String, dynamic>;
+      final generationConfig = body['generationConfig'] as Map<String, dynamic>;
+      // GeminiService.model 'gemini-3.5-flash-lite' iken thinkingConfig HİÇ
+      // gönderilmemeli (bkz. supportsThinkingConfig grubu); desteklendiği
+      // modellerde ise eskisi gibi {'thinkingBudget': 0} gönderilmeli.
+      if (GeminiService.supportsThinkingConfig(GeminiService.model)) {
+        expect(generationConfig['thinkingConfig'], {'thinkingBudget': 0});
+      } else {
+        expect(generationConfig.containsKey('thinkingConfig'), isFalse);
+      }
+    },
+  );
 
   test(
     'thinkingBudget: null verilirse dinamik thinking için thinkingConfig gönderilmez',
@@ -194,6 +205,100 @@ void main() {
               as Map<String, dynamic>;
       final generationConfig = body['generationConfig'] as Map<String, dynamic>;
       expect(generationConfig.containsKey('thinkingConfig'), isFalse);
+    },
+  );
+
+  group(
+    'gemini-3.5-flash-lite thinkingConfig uyumsuzluğu '
+    '(2026-08-07 canlı doğrulandı — 400 INVALID_ARGUMENT)',
+    () {
+      test('supportsThinkingConfig("gemini-3.5-flash-lite") false döner', () {
+        expect(
+          GeminiService.supportsThinkingConfig('gemini-3.5-flash-lite'),
+          isFalse,
+        );
+      });
+
+      test('supportsThinkingConfig diğer modellerde true döner', () {
+        expect(GeminiService.supportsThinkingConfig('gemini-3.5-flash'), isTrue);
+        expect(GeminiService.supportsThinkingConfig('gemini-2.5-flash'), isTrue);
+      });
+
+      test(
+        'generate() isteğinde flash-lite iken thinkingConfig payload\'da HİÇ '
+        'olmuyor, desteklenen modellerde hâlâ gönderiliyor',
+        () async {
+          http.Request? captured;
+          final service = GeminiService(
+            client: MockClient((req) async {
+              captured = req;
+              return http.Response(
+                _geminiEnvelope(
+                  jsonEncode([
+                    {'soru': 'S', 'cevap': 'C', 'zorluk': 'orta', 'konu': 'x'},
+                  ]),
+                ),
+                200,
+              );
+            }),
+          );
+
+          await service.generate(_validInput);
+
+          final body =
+              (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
+                  as Map<String, dynamic>;
+          final generationConfig =
+              body['generationConfig'] as Map<String, dynamic>;
+
+          // GeminiService.model'in O ANKİ değerine göre iki dalı da doğrular
+          // — supportsThinkingConfig'in kendisi ayrıca sabit iki model adıyla
+          // yukarıda koşulsuz test edildiği için burası "gerçek istekte de
+          // aynı karar uygulanıyor mu" bağlantısını (wiring) kapatır.
+          if (GeminiService.model == 'gemini-3.5-flash-lite') {
+            expect(generationConfig.containsKey('thinkingConfig'), isFalse);
+          } else {
+            expect(generationConfig.containsKey('thinkingConfig'), isTrue);
+          }
+        },
+      );
+
+      test(
+        'generateForPage() isteğinde de AYNI davranış uygulanır',
+        () async {
+          http.Request? captured;
+          final service = GeminiService(
+            client: MockClient((req) async {
+              captured = req;
+              return http.Response(
+                _geminiEnvelope(
+                  jsonEncode([
+                    {'soru': 'S', 'cevap': 'C', 'zorluk': 'orta', 'konu': 'x'},
+                  ]),
+                ),
+                200,
+              );
+            }),
+          );
+
+          await service.generateForPage(
+            'Sayfa metni, yeterince uzun bir içerik.',
+            3,
+          );
+
+          final body =
+              (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
+                  as Map<String, dynamic>;
+          final generationConfig =
+              body['generationConfig'] as Map<String, dynamic>;
+
+          if (GeminiService.model == 'gemini-3.5-flash-lite') {
+            expect(generationConfig.containsKey('thinkingConfig'), isFalse);
+          } else {
+            expect(generationConfig.containsKey('thinkingConfig'), isTrue);
+          }
+        },
+      );
     },
   );
 

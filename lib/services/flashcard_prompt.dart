@@ -16,7 +16,7 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
-const String kPromptVersion = 'v22';
+const String kPromptVersion = 'v23';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -131,6 +131,48 @@ EL YAZISI İŞARETİ (kart dizisinin son elemanı, "elYazisindanMi"):
 - KAYNAĞA ATIF YASAK: soru ya da cevapta kaynağın NE olduğuna veya NEREDEN geldiğine dair hiçbir ifade kullanma — "el yazısı", "el yazısıyla eklenen", "görseldeki", "görselde", "resimde", "slaytın köşesinde", "slaytta not düşülen", "yazılan not" gibi kelime/kalıplar YASAK. Soru doğrudan bilginin kendisini sorsun, kaynağını değil.
   Kötü örnek: "Slaytın köşesine el yazısıyla eklenen not neydi?"
   İyi örnek: "Bulaşıcı hastalık epidemiyolojisinde vurgulanan iki temel önlem kategorisi nedir?"''';
+
+/// El yazısı NET OKUNAMADIĞINDA ne yapılacağını söyleyen kural; [elYazisiKurali]'nın
+/// hemen ardından, yalnızca görsel eklendiğinde prompt'a girer.
+///
+/// [kaynakSadakatiKurali] İLE AYNI ŞEY DEĞİL — bilinçli olarak ayrı bir blok:
+/// orada kaynak NETTİR ama hatalıdır (ve düzeltilmeden aynen aktarılır); burada
+/// kaynağın KENDİSİ okunamıyor. Gerçek vaka: model belirsiz bir el yazısı
+/// kelimeyi yanlış okuyup ("tanımlar" → "Fonlar") bu yanlış okumanın üzerine
+/// tamamen uydurma bir açıklama inşa etti. Yani hata kaynağı sadakat değil,
+/// OKUMA belirsizliğinin tahminle kapatılmasıydı.
+///
+/// TEK ÇIKIŞ YOLU BİLİNÇLİ: taslakta ikinci bir seçenek daha vardı ("el
+/// yazısının var olduğunu ama okunamadığını belirten gözlem kartı üret"), ama
+/// böyle bir kart [elYazisiKurali]'ndaki KAYNAĞA ATIF YASAĞI'nı ("el yazısı",
+/// "görselde" gibi ifadeler soru/cevap metninde YASAK) ihlal etmeden
+/// yazılamazdı — model iki kuraldan birini çiğnemek zorunda kalırdı. Kullanıcı
+/// kararı: seçenek kaldırıldı, geriye tek davranış kaldı — okunamayan notu
+/// ATLA. Geri eklemek istersen önce atıf yasağına dar bir muafiyet yazmak
+/// gerekir.
+const String belirsizElYazisiKurali = '''
+BELİRSİZ/OKUNAKSIZ EL YAZISI — YORUMLAMA, TAHMİN ETME:
+- Ekli görüntüdeki bir el yazısı/not TAM OLARAK net okunamıyorsa (harfler belirsiz, kelime emin olunamayacak kadar bulanık ya da süslüyse): o SPESİFİK kelimeyi/ifadeyi YORUMLAMAYA veya TAHMİN ETMEYE çalışma.
+- Yapman gereken tek şey var: o el yazısı notunu YOK SAY ve yalnızca sayfanın net okunabilir (basılı) içeriğinden kart üret. Okunamayan not hakkında ayrıca bir kart da AÇMA.
+- ASLA net olmayan bir okumaya dayanarak kesin bir "bilgi" uydurma. Yanlış okunan bir kelimeden yeni bir açıklama İNŞA ETMEK, kaynak sadakati kuralının en ciddi ihlalidir.
+  Kötü örnek: El yazısıyla yazılmış, harfleri belirsiz bir kelimeyi "Fonlar" diye yorumlayıp bunun üzerine finansal bir açıklama uydurmak.
+  İyi örnek: Belirsiz kelimeyi atlayıp, sayfanın net basılı metninden kart üretmek.''';
+
+/// [kartEtiketleriKurali]'nın (ÇIKTI BİÇİMİ bölümü) HEMEN ÖNÜNE, yalnızca
+/// görsel eklendiğinde konan tek satırlık hatırlatma.
+///
+/// NEDEN AYRI BİR BLOK: ayrımın ayrıntılı hâli zaten [elYazisiKurali]'nda var
+/// ve iki kez güçlendirildi, ama model bazı PDF'lerde hâlâ kalın/madde işaretli
+/// düz metni el yazısı sanıp aşırı işaretliyordu — ayrıntılı kural prompt'un
+/// ORTASINDA kalıyor. Bu satır, modelin çıktıyı üretmeye en yakın olduğu yerde
+/// aynı kararı kısa ve sert biçimde tekrarlar. Yeni bir tanım GETİRMEZ,
+/// [elYazisiKurali]'ndaki ayrımın özetidir; o kural değişirse burası da
+/// hizalanmalı.
+const String etiketlemeSonHatirlatmasi =
+    '**SON HATIRLATMA — elYazisindanMi alanı: Kalın yazı, madde işareti, '
+    'renkli başlık veya tablo formatı = ASLA el yazısı değildir. Bu alan '
+    'yalnızca gerçekten SONRADAN elle eklenmiş bir işaret için true olur. '
+    'Şüphedeysen false yaz.**';
 
 /// Slayt kendi üzerinde numaralandırılmışsa o numarayı okutup "slaytNumarasi"
 /// alanına yazdıran kural; yalnızca [buildPagePrompt]'a, yalnızca görsel
@@ -338,9 +380,9 @@ $terminolojiStandardiKurali
 $guncellikDiliYasagiKurali
 
 $ikiKatmanliCevapKurali
-${hasMedia ? '\n$elYazisiKurali\n' : ''}
+${hasMedia ? '\n$elYazisiKurali\n\n$belirsizElYazisiKurali\n' : ''}
 HER KART İÇİN:
-$kartEtiketleriKurali$notBlogu
+${hasMedia ? '$etiketlemeSonHatirlatmasi\n\n' : ''}$kartEtiketleriKurali$notBlogu
 ''';
 }
 
@@ -390,10 +432,10 @@ $terminolojiStandardiKurali
 $guncellikDiliYasagiKurali
 
 $ikiKatmanliCevapKurali
-${hasImage ? '\n$elYazisiKurali\n\n$slaytNumarasiKurali\n' : ''}
+${hasImage ? '\n$elYazisiKurali\n\n$belirsizElYazisiKurali\n\n$slaytNumarasiKurali\n' : ''}
 HER KART İÇİN:
 - Soru ve cevabı (2-4 cümle, gerekçesini de ver) Türkçe yaz. $cevapSadeligiKurali
-$kartEtiketleriKurali
+${hasImage ? '$etiketlemeSonHatirlatmasi\n\n' : ''}$kartEtiketleriKurali
 
 Bu sayfadan sayfanın içerdiği bilgi miktarına göre kart üret (sınav tipi kartlar dahil, her klinik ilişki için ayrı sayılır); basit bir sayfa 2-3 kart yeterli olabilir, yoğun tablo/liste veya çok sayıda klinik ilişki içeren bir sayfa 25 karta kadar çıkabilir — bir üst sınır olarak düşünme, sayfadaki her ayrı ilişkiyi kapsamak öncelik. Sadece kapsamı doldurmak için tekrar/şişirme kart üretme.
 
