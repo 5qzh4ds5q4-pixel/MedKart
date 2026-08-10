@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/flashcard.dart';
+import '../theme/app_theme.dart';
 import 'card_chips.dart';
 import 'two_layer_answer.dart';
 
@@ -22,8 +23,30 @@ class FlashcardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    // Dashboard tasarım sistemi: border YOK, `dashboardSurface` zemin (bkz.
+    // `_SummaryCard`'daki aynı desen — koyu modda en yakın MEVCUT token
+    // `heroSurface`, yeni renk tanımlanmadı). `Card` widget'ı DEĞİL düz
+    // `Container` kullanılıyor çünkü global `cardTheme` her zaman bir
+    // kenarlık çiziyor.
+    final tileSurface = isDark ? AppTheme.heroSurface : AppTheme.dashboardSurface;
+    final linkColor = AppTheme.dashboardVioletDeep;
+    final favoriteBg = AppTheme.dashboardVioletDeep.withValues(
+      alpha: isDark ? 0.22 : 0.12,
+    );
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: tileSurface,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
         child: Column(
@@ -83,6 +106,7 @@ class FlashcardTile extends StatelessWidget {
                     expandedAnswerStyle: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
+                    expandLinkColor: linkColor,
                   ),
                   if (card.hasNote) ...[
                     const SizedBox(height: 10),
@@ -101,7 +125,10 @@ class FlashcardTile extends StatelessWidget {
                         SourcePageChip(page: card.sourcePage!),
                       if (card.isHandwritten) ...[
                         const HandwrittenIcon(),
-                        const HandwrittenFavoriteChip(),
+                        HandwrittenFavoriteChip(
+                          background: favoriteBg,
+                          foreground: AppTheme.dashboardVioletDeep,
+                        ),
                       ],
                       if (card.isEdited) const EditedChip(),
                       if (card.flagged) const FlaggedChip(),

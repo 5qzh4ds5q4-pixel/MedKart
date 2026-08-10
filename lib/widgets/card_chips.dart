@@ -146,14 +146,21 @@ class HandwrittenIcon extends StatelessWidget {
 /// tohumu, o yüzden `primaryContainer`/`onPrimaryContainer` token'ları
 /// doğrudan amber render eder.
 class HandwrittenFavoriteChip extends StatelessWidget {
-  const HandwrittenFavoriteChip({super.key});
+  const HandwrittenFavoriteChip({super.key, this.background, this.foreground});
+
+  /// Verilmezse tema varsayılanı (`primaryContainer`/`onPrimaryContainer`,
+  /// uygulama markasının ambere döndüğü yer). Kart listesi (`FlashcardTile`)
+  /// bunu dashboard'un mor/pembe tonuna geçirir — `StudyScreen` de bu rozeti
+  /// kullandığı için renk burada OPSİYONEL, varsayılan davranış korunuyor.
+  final Color? background;
+  final Color? foreground;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return _Chip(
-      background: theme.colorScheme.primaryContainer,
-      foreground: theme.colorScheme.onPrimaryContainer,
+      background: background ?? theme.colorScheme.primaryContainer,
+      foreground: foreground ?? theme.colorScheme.onPrimaryContainer,
       label: 'Hocanın Favorisi',
       icon: Icons.star_rounded,
     );

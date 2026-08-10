@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/flashcard.dart';
+import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
 
 /// Kartın soru/cevabını düzenleme, kendi notunu ekleme ve hata bildirme
@@ -88,11 +89,60 @@ class _EditCardDialogState extends State<EditCardDialog> {
     return null;
   }
 
+  /// Soru/cevap/not/konu alanlarının ortak görünümü — 2026-08-10 dashboard
+  /// tasarım sistemine uyum: kenarlık YOK, yalnızca dolgu rengiyle ayrışır;
+  /// odaklanınca ince mor bir parıltı (glow) belirir. [pill] `true` iken
+  /// (yalnızca "Konu" alanı) köşeler tam yuvarlanır — etiket/pil görünümü.
+  InputDecoration _fieldDecoration(
+    BuildContext context, {
+    String? hintText,
+    bool pill = false,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fillColor = isDark
+        ? const Color(0xFF1E2330)
+        : AppTheme.dashboardSurfaceElevated;
+    final glow = AppTheme.dashboardVioletDeep.withValues(alpha: 0.30);
+    final radius = BorderRadius.circular(pill ? 999 : 12);
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    return InputDecoration(
+      hintText: hintText,
+      filled: true,
+      fillColor: fillColor,
+      border: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: glow, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: errorColor, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: errorColor, width: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final modalBackground = isDark
+        ? const Color(0xFF13181F)
+        : AppTheme.dashboardSurface;
 
     return AlertDialog(
+      backgroundColor: modalBackground,
       title: const Text('Kartı düzenle'),
       // Dar ekranda dialog kenarlara yapışmasın, geniş ekranda büyümesin.
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -114,6 +164,7 @@ class _EditCardDialogState extends State<EditCardDialog> {
                   minLines: 2,
                   textCapitalization: TextCapitalization.sentences,
                   validator: (v) => _validateNotEmpty(v, 'Soru'),
+                  decoration: _fieldDecoration(context),
                 ),
                 const SizedBox(height: 16),
                 _FieldLabel('Kısa cevap'),
@@ -123,7 +174,8 @@ class _EditCardDialogState extends State<EditCardDialog> {
                   maxLines: null,
                   minLines: 1,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
+                  decoration: _fieldDecoration(
+                    context,
                     hintText: 'ör. "Osteoklast" — boş bırakılırsa tek '
                         'katmanlı (yalnızca aşağıdaki cevap) gösterilir',
                   ),
@@ -137,6 +189,7 @@ class _EditCardDialogState extends State<EditCardDialog> {
                   minLines: 3,
                   textCapitalization: TextCapitalization.sentences,
                   validator: (v) => _validateNotEmpty(v, 'Cevap'),
+                  decoration: _fieldDecoration(context),
                 ),
                 if (widget.card.isEdited) ...[
                   const SizedBox(height: 6),
@@ -154,30 +207,38 @@ class _EditCardDialogState extends State<EditCardDialog> {
                   maxLines: null,
                   minLines: 2,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
+                  decoration: _fieldDecoration(
+                    context,
                     hintText: 'ör. "SÜT: Sinüs, Üçlü kapak, Truncus…"',
                   ),
                 ),
                 const SizedBox(height: 16),
                 _FieldLabel('Zorluk'),
                 const SizedBox(height: 6),
-                SegmentedButton<CardDifficulty>(
-                  segments: [
-                    for (final d in CardDifficulty.values)
-                      ButtonSegment(value: d, label: Text(d.label)),
+                Row(
+                  children: [
+                    for (final d in CardDifficulty.values) ...[
+                      if (d != CardDifficulty.values.first)
+                        const SizedBox(width: 8),
+                      Expanded(
+                        child: _DifficultyPillButton(
+                          difficulty: d,
+                          selected: _difficulty == d,
+                          onTap: () => setState(() => _difficulty = d),
+                        ),
+                      ),
+                    ],
                   ],
-                  selected: {_difficulty},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (selection) =>
-                      setState(() => _difficulty = selection.first),
                 ),
                 const SizedBox(height: 16),
                 _FieldLabel('Konu'),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _topicController,
-                  decoration: const InputDecoration(
+                  decoration: _fieldDecoration(
+                    context,
                     hintText: 'ör. koroner dolaşım',
+                    pill: true,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -207,8 +268,112 @@ class _EditCardDialogState extends State<EditCardDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('İptal'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Kaydet')),
+        _GradientSaveButton(onPressed: _save),
       ],
+    );
+  }
+}
+
+/// Zorluk seçimi (Kolay/Orta/Zor) — dolu (filled) pill stili. Seçili pill
+/// [DifficultyChip] ile AYNI renk paletini kullanır (bkz. `card_chips.dart`)
+/// ki bu diyalogdaki seçim rengi ile kart listesindeki rozet rengi birebir
+/// eşleşsin; paylaşımlı bir sabite çıkarmak yerine BİLİNÇLİ olarak burada
+/// tekrarlandı (bu widget'a özel, paylaşılan dosyaya dokunmadan). Seçili
+/// OLMAYAN pill'ler "ghost": renksiz, soluk zemin + soluk metin — seçim tek
+/// bakışta belirgin olsun diye.
+class _DifficultyPillButton extends StatelessWidget {
+  const _DifficultyPillButton({
+    required this.difficulty,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CardDifficulty difficulty;
+  final bool selected;
+  final VoidCallback onTap;
+
+  static const Map<CardDifficulty, (Color bg, Color fg)> _lightPalette = {
+    CardDifficulty.kolay: (Color(0xFFE7F2EC), Color(0xFF2C6A4F)),
+    CardDifficulty.orta: (Color(0xFFFAF0DC), Color(0xFF8A6510)),
+    CardDifficulty.zor: (Color(0xFFF8E8E6), Color(0xFF9A3B32)),
+  };
+
+  static const Map<CardDifficulty, (Color bg, Color fg)> _darkPalette = {
+    CardDifficulty.kolay: (Color(0xFF1E3A2C), Color(0xFF8FD4AE)),
+    CardDifficulty.orta: (Color(0xFF3A3320), Color(0xFFE6C36B)),
+    CardDifficulty.zor: (Color(0xFF3E2422), Color(0xFFE79A90)),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final (bg, fg) = (isDark ? _darkPalette : _lightPalette)[difficulty]!;
+    final ghostColor = isDark
+        ? AppTheme.textTertiaryDark
+        : AppTheme.dashboardTextMuted;
+    final ghostFill = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : Colors.black.withValues(alpha: 0.03);
+
+    return Material(
+      color: selected ? bg : ghostFill,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          alignment: Alignment.center,
+          child: Text(
+            difficulty.label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: selected ? fg : ghostColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Kaydet" butonu — dashboard'ın CTA gradyanıyla (bkz. `AppTheme.
+/// dashboardCtaGradient`, `deck_list_screen.dart`'taki `_DarkGradientButton`
+/// ile AYNI renkler) aynı görsel dil, ama o widget'a bağımlı olmadan (dosyalar
+/// arası private sınıf paylaşımı yok) burada ayrıca tanımlandı. Şekil
+/// BİLİNÇLİ olarak pill DEĞİL — uygulamanın genel `filledButtonTheme`'iyle
+/// aynı 12px köşe, çünkü bu bir dialog aksiyon butonu (hero CTA değil),
+/// diğer dialoglardaki butonlarla tutarlı kalsın diye.
+class _GradientSaveButton extends StatelessWidget {
+  const _GradientSaveButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onPressed,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: AppTheme.dashboardCtaGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: const Text(
+            'Kaydet',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

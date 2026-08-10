@@ -17,6 +17,7 @@ class TwoLayerAnswer extends StatefulWidget {
     this.singleAnswerStyle,
     this.shortAnswerStyle,
     this.expandedAnswerStyle,
+    this.expandLinkColor,
   });
 
   final Flashcard card;
@@ -31,6 +32,13 @@ class TwoLayerAnswer extends StatefulWidget {
   /// "Açıklamasını gör" ile açılan [Flashcard.answer] stili. Verilmezse
   /// [TextTheme.bodyMedium].
   final TextStyle? expandedAnswerStyle;
+
+  /// "Açıklamasını gör" butonunun rengi. `null` iken tema varsayılanı
+  /// (`TextButton`'ın `colorScheme.primary`'si). Bu widget `StudyScreen` ile
+  /// `FlashcardTile` (kart listesi) arasında PAYLAŞILDIĞI için burada opsiyonel
+  /// tutuldu — yalnızca kart listesi dashboard vurgusuna (mor/pembe) geçti,
+  /// çalışma ekranının rengine dokunulmadı.
+  final Color? expandLinkColor;
 
   @override
   State<TwoLayerAnswer> createState() => _TwoLayerAnswerState();
@@ -81,6 +89,11 @@ class _TwoLayerAnswerState extends State<TwoLayerAnswer> {
             onPressed: () => setState(() => _expanded = true),
             icon: const Icon(Icons.expand_more, size: 18),
             label: const Text('Açıklamasını gör'),
+            style: widget.expandLinkColor == null
+                ? null
+                : TextButton.styleFrom(
+                    foregroundColor: widget.expandLinkColor,
+                  ),
           ),
         ],
       ],

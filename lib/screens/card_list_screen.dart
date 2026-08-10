@@ -7,6 +7,7 @@ import '../models/flashcard.dart';
 import '../services/file_transfer.dart';
 import '../services/pdf_export_service.dart';
 import '../state/flashcard_store.dart';
+import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
 import '../utils/require_auth.dart';
 import '../widgets/content_shell.dart';
@@ -209,6 +210,10 @@ class _CardListScreenState extends State<CardListScreen> {
         ],
       ),
       body: SafeArea(
+        // `bottom: false` VERİLMEDİ — Scaffold, `bottomNavigationBar`
+        // doluyken body'ye sızan MediaQuery alt boşluğunu zaten kendisi
+        // sıfırlıyor (çifte boşluk riski yok); boş durumda (bottomNavigationBar
+        // null) bu SafeArea'nın alt kenarı hâlâ gerekli.
         child: allCards.isEmpty
             ? _EmptyState(onAddCards: () => _addCards(context))
             : Column(
@@ -277,17 +282,23 @@ class _CardListScreenState extends State<CardListScreen> {
                             ),
                           ),
                   ),
-                  _StudyBar(
-                    dueCount: store
-                        .dueIn(widget.deckId, filter: _filter)
-                        .length,
-                    filtered: _filter.isActive,
-                    enabled: cards.isNotEmpty,
-                    onPressed: () => _startStudying(context),
-                  ),
                 ],
               ),
       ),
+      // 2026-08-10: eskiden bu Column'un son çocuğuydu — dar/uzun içerikte
+      // (ör. son kartın "Açıklamasını gör" açılması) listenin son öğesini
+      // gizleme riski taşıyordu. Scaffold'un KENDİ `bottomNavigationBar`
+      // katmanı içeriğin üzerine binmeyeceğini garanti eder (Scaffold body'ye
+      // ayrılan yüksekliği bu alanı çıkararak hesaplar) — Positioned/Stack
+      // yerine bu tercih edildi, aynı sonucu daha az karmaşıklıkla verir.
+      bottomNavigationBar: allCards.isEmpty
+          ? null
+          : _StudyBar(
+              dueCount: store.dueIn(widget.deckId, filter: _filter).length,
+              filtered: _filter.isActive,
+              enabled: cards.isNotEmpty,
+              onPressed: () => _startStudying(context),
+            ),
     );
   }
 
@@ -376,13 +387,26 @@ class _SummaryCard extends StatelessWidget {
       ),
     ];
 
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       key: cardListSummaryKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        // Border YOK, bilinçli: dashboard tasarım sistemiyle tutarlı olsun
+        // diye — bkz. `AppTheme` dashboard token'ları. Koyu modda karşılığı
+        // olan `AppTheme.dashboardSurface` (beyaz) tanımsız olduğu için en
+        // yakın MEVCUT koyu yüzey token'ı (`heroSurface`) kullanılıyor; yeni
+        // bir renk TANIMLANMADI.
+        color: isDark ? AppTheme.heroSurface : AppTheme.dashboardSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -421,13 +445,18 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-/// Amber çerçeveli daire + belge ikonu, köşesinde onay rozeti.
+/// Çerçeveli daire + belge ikonu, köşesinde onay rozeti. Vurgu rengi BİLİNÇLİ
+/// olarak `scheme.primary` (uygulama markasının amberi) DEĞİL, dashboard
+/// tasarım sisteminin mor vurgusu (`AppTheme.dashboardVioletDeep`) — bu
+/// ekranın diğer dashboard öğeleriyle (gradyan banner, filtre pilleri) aynı
+/// vurgu ailesinde kalsın diye.
 class _ReadyBadge extends StatelessWidget {
   const _ReadyBadge();
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ringSurface = isDark ? AppTheme.heroSurface : AppTheme.dashboardSurface;
 
     return SizedBox(
       width: 56,
@@ -439,12 +468,12 @@ class _ReadyBadge extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary, width: 2),
+              border: Border.all(color: AppTheme.dashboardVioletDeep, width: 2),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.description_outlined,
               size: 26,
-              color: scheme.primary,
+              color: AppTheme.dashboardVioletDeep,
             ),
           ),
           Positioned(
@@ -454,12 +483,12 @@ class _ReadyBadge extends StatelessWidget {
               width: 20,
               height: 20,
               decoration: BoxDecoration(
-                color: scheme.primary,
+                color: AppTheme.dashboardVioletDeep,
                 shape: BoxShape.circle,
                 // Daire kenarlığıyla çakışmasın diye kart zemini kadar halka.
-                border: Border.all(color: scheme.surfaceContainerHighest, width: 2),
+                border: Border.all(color: ringSurface, width: 2),
               ),
-              child: Icon(Icons.check, size: 12, color: scheme.onPrimary),
+              child: const Icon(Icons.check, size: 12, color: Colors.white),
             ),
           ),
         ],
@@ -563,6 +592,7 @@ class _FilterBar extends StatelessWidget {
             const SizedBox(width: 8),
             for (final d in CardDifficulty.values) ...[
               _chip(
+                context: context,
                 label: d.label,
                 selected: filter.difficulties.contains(d),
                 onSelected: (v) => onChanged(filter.withDifficulty(d, v)),
@@ -571,6 +601,7 @@ class _FilterBar extends StatelessWidget {
             ],
             for (final t in topics) ...[
               _chip(
+                context: context,
                 label: t,
                 selected: filter.topics.contains(t),
                 onSelected: (v) => onChanged(filter.withTopic(t, v)),
@@ -597,11 +628,30 @@ class _FilterBar extends StatelessWidget {
     );
   }
 
+  /// Zorluk/konu pili — border YOK, `dashboardSurfaceElevated` zemin (bkz.
+  /// görev tanımı). Koyu modda `AppTheme.dashboardSurfaceElevated` (açık mod
+  /// token'ı) yerine en yakın MEVCUT koyu "elevated" yüzeyi (`heroNeutralFill`)
+  /// kullanılıyor — yeni bir renk TANIMLANMADI, hepsi `AppTheme`'de zaten var.
   Widget _chip({
+    required BuildContext context,
     required String label,
     required bool selected,
     required ValueChanged<bool> onSelected,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBg = isDark
+        ? AppTheme.heroNeutralFill
+        : AppTheme.dashboardSurfaceElevated;
+    final unselectedFg = isDark
+        ? AppTheme.textTertiaryDark
+        : AppTheme.dashboardTextMuted;
+    final selectedBg = isDark
+        ? AppTheme.dashboardVioletDeep.withValues(alpha: 0.22)
+        : AppTheme.dashboardViolet.withValues(alpha: 0.18);
+    final selectedFg = isDark
+        ? AppTheme.dashboardViolet
+        : AppTheme.dashboardVioletDeep;
+
     return FilterChip(
       label: Text(label),
       selected: selected,
@@ -609,6 +659,13 @@ class _FilterBar extends StatelessWidget {
       showCheckmark: false,
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      side: BorderSide.none,
+      backgroundColor: unselectedBg,
+      selectedColor: selectedBg,
+      labelStyle: TextStyle(
+        color: selected ? selectedFg : unselectedFg,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+      ),
     );
   }
 }
@@ -676,6 +733,12 @@ class _StudyBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: ContentShell(
+          // `bottomNavigationBar` slotu Scaffold'dan "gövde kadar yüksek
+          // olabilirsin" izni alır; shrinkWrapHeight olmadan ContentShell bu
+          // izni sonuna kadar kullanıp TÜM ekranı kaplar, gövdeye 0 yükseklik
+          // kalır (bkz. content_shell.dart doc yorumu — buradaki gerçek
+          // regresyonun kök nedeniydi).
+          shrinkWrapHeight: true,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: ResponsiveBuilder(
             builder: (context, size) => SizedBox(
@@ -695,9 +758,11 @@ class _StudyBar extends StatelessWidget {
 
 /// "Hocanın Favorilerini Çalış" hızlı pratik moduna giriş — yalnızca destede
 /// en az 3 el yazısı kart varken gösterilir (bkz. `_CardListScreenState.
-/// _startHandwrittenPractice`). Amber vurgu için özel bir palet TANIMLAMAZ,
-/// `primaryContainer`/`onPrimaryContainer` token'ları zaten amber (bkz.
-/// `HandwrittenFavoriteChip` doc yorumu).
+/// _startHandwrittenPractice`). 2026-08-10: artık amber `primaryContainer`
+/// DEĞİL, dashboard'un mor→pembe CTA gradyanı (`AppTheme.dashboardCtaGradient`
+/// — dashboard'daki "Çalışmaya Başla" butonuyla AYNI, zaten mevcut token) —
+/// iki modda da aynı, opak bir gradyan olduğu için ayrıca light/dark dalı
+/// gerekmiyor.
 class _HandwrittenPracticeBanner extends StatelessWidget {
   const _HandwrittenPracticeBanner({
     required this.cardCount,
@@ -710,42 +775,43 @@ class _HandwrittenPracticeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return Material(
-      color: scheme.primaryContainer,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              Icon(
-                Icons.star_rounded,
-                size: 20,
-                color: scheme.onPrimaryContainer,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Hocanın Favorilerini Çalış',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: AppTheme.dashboardCtaGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.star_rounded, size: 20, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Hocanın Favorilerini Çalış',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Text(
-                '$cardCount kart',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                Text(
+                  '$cardCount kart',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.chevron_right, color: scheme.onPrimaryContainer),
-            ],
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right, color: Colors.white),
+              ],
+            ),
           ),
         ),
       ),

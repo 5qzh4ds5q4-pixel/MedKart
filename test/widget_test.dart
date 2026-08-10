@@ -85,8 +85,16 @@ const _sampleNote =
     'Aort sol ventrikülden çıkar.';
 
 /// Deste listesinden desteyi açıp "Kart Ekle" ekranına gider.
+///
+/// `ensureVisible`: 2026-08-10 kart-ızgara dashboard yenilemesinden sonra
+/// hero banner + kısayollar üstte epey yer kaplıyor, test yüzeyinin
+/// varsayılan 600px yüksekliğinde deste kartı kaydırılmadan görünmeyebiliyor
+/// — gerçek kullanıcı da kısa ekranda aynı şekilde kaydırır, bu doğal.
 Future<void> _openAddCards(WidgetTester tester) async {
-  await tester.tap(find.text('Komite 1 · Kalp'));
+  final deckFinder = find.text('Komite 1 · Kalp');
+  await tester.ensureVisible(deckFinder);
+  await tester.pumpAndSettle();
+  await tester.tap(deckFinder);
   await tester.pumpAndSettle();
   await tester.tap(find.text('Kart Ekle'));
   await tester.pumpAndSettle();
@@ -240,6 +248,9 @@ void main() {
     final store = _store(_FakeGenerator());
     await tester.pumpWidget(_wrap(store));
 
+    // ensureVisible: bkz. `_openAddCards` doc yorumu.
+    await tester.ensureVisible(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Yeniden adlandır'));
@@ -267,6 +278,9 @@ void main() {
     );
     await tester.pumpWidget(_wrap(store));
 
+    // ensureVisible: bkz. `_openAddCards` doc yorumu.
+    await tester.ensureVisible(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sil'));
@@ -281,6 +295,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.decks, hasLength(1));
 
+    await tester.ensureVisible(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sil'));

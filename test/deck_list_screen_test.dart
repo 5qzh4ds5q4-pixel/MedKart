@@ -177,6 +177,12 @@ void main() {
     );
   });
 
+  // NOT (2026-08-10): 'Sınav ' aramaları BİLİNÇLİ olarak sondaki boşlukla
+  // yazılıyor — dashboard'daki "Deneme Sınavı" kısayol kartı da "Sınav"
+  // alt dizesini içeriyor (Sınavı = Sınav + ı), boşluksuz arama onu da
+  // yakalayıp testi yanlış sebeple geçirir/kırardı. Deste kartındaki sınav
+  // tarihi rozeti hep "Sınav {tarih}..." biçiminde SONRASINDA boşluk içerir,
+  // "Deneme Sınavı" içermez — bu yüzden ayrım güvenli.
   group('sınav tarihi', () {
     testWidgets('sınav tarihi belirlenince deste kartında görünür',
         (tester) async {
@@ -186,8 +192,12 @@ void main() {
       );
       await tester.pumpWidget(_wrap(store));
 
-      expect(find.textContaining('Sınav'), findsNothing);
+      expect(find.textContaining('Sınav '), findsNothing);
 
+      // ensureVisible: bkz. `widget_test.dart`'taki `_openAddCards` doc
+      // yorumu — sol sidebar + üst şerit dolu dashboard'ta ek yer kaplıyor.
+      await tester.ensureVisible(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.more_vert));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sınav tarihi belirle'));
@@ -198,7 +208,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(store.deckById('deck-a')!.hasExamDate, isTrue);
-      expect(find.textContaining('Sınav'), findsOneWidget);
+      expect(find.textContaining('Sınav '), findsOneWidget);
       expect(find.textContaining('gün kaldı'), findsOneWidget);
     });
 
@@ -213,15 +223,17 @@ void main() {
       );
       await tester.pumpWidget(_wrap(store));
 
-      expect(find.textContaining('Sınav'), findsOneWidget);
+      expect(find.textContaining('Sınav '), findsOneWidget);
 
+      await tester.ensureVisible(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.more_vert));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sınav tarihini kaldır'));
       await tester.pumpAndSettle();
 
       expect(store.deckById('deck-a')!.hasExamDate, isFalse);
-      expect(find.textContaining('Sınav'), findsNothing);
+      expect(find.textContaining('Sınav '), findsNothing);
     });
 
     testWidgets('sınava 3 günden az kalınca yoğun tekrar rozeti gösterilir',
@@ -395,7 +407,12 @@ void main() {
 
         expect(settings.isPriorityMode('deck-a'), isFalse);
 
-        await tester.tap(find.text('Öncelikli Kartlara Odaklan'));
+        // ensureVisible: bkz. `widget_test.dart`'taki `_openAddCards` doc
+        // yorumu — kısayol satırı + uyarı kartı üstte yer kaplıyor.
+        final toggleFinder = find.text('Öncelikli Kartlara Odaklan');
+        await tester.ensureVisible(toggleFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(toggleFinder);
         await tester.pumpAndSettle();
 
         expect(settings.isPriorityMode('deck-a'), isTrue);

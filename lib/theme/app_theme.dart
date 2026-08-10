@@ -77,6 +77,58 @@ class AppTheme {
   static const Color _textSecondaryLight = Color(0xFF5B6472);
 
   // ==========================================================================
+  // Dashboard (koyu mod) vurgu paleti — 2026-08-10, YALNIZCA `DeckListScreen`
+  // koyu moddaki dashboard görünümünde kullanılır (bkz. `_DarkDashboardBody`).
+  // Kaynak: "medkart koyu mod dashboard" referans tasarımı. Genel marka
+  // amber'ıyla ÇAKIŞMASIN diye ayrı token'lar — sayfa/kart zemini hâlâ
+  // [heroBackground]/[heroSurface]'ı paylaşıyor, burada yalnızca bu ekrana
+  // özel mor/pembe VURGU renkleri ve gradyanlar eklendi. Genel palet
+  // (amber) DEĞİŞMEDİ.
+  // ==========================================================================
+  static const Color dashboardViolet = Color(0xFFD2BBFF);
+  static const Color dashboardVioletDeep = Color(0xFF7C3AED);
+  static const Color dashboardPink = Color(0xFFFFB0CD);
+  static const Color dashboardPinkHot = Color(0xFFEC4899);
+  static const Color dashboardOrange = Color(0xFFFFB784);
+  static const Color dashboardRed = Color(0xFFFFB4AB);
+
+  /// Ana CTA butonu ("Çalışmaya Başla") için — koyu mor → sıcak pembe.
+  static const LinearGradient dashboardCtaGradient = LinearGradient(
+    colors: [dashboardVioletDeep, dashboardPinkHot],
+  );
+
+  /// İlerleme çubukları için — açık mor → açık pembe (CTA'dan daha soluk).
+  static const LinearGradient dashboardProgressGradient = LinearGradient(
+    colors: [dashboardViolet, dashboardPink],
+  );
+
+  /// Deste kartlarındaki kategori pili renk döngüsü — sırayla kullanılır,
+  /// tek bir konuya sabit renk atamaz (yeni konular geldikçe otomatik döner).
+  static const List<Color> dashboardCategoryPalette = [
+    dashboardOrange,
+    dashboardRed,
+    dashboardViolet,
+    dashboardPink,
+  ];
+
+  // ==========================================================================
+  // Dashboard (açık mod) yüzey/metin paleti — 2026-08-10, "medcard light
+  // mode dashboard" referans tasarımından. Koyu moddaki dashboard'ın
+  // [heroBackground]/[heroSurface] ikilisine karşılık gelir, ama AMBIENT
+  // açık temanın (`_surfaceLight`, sıcak krem) kendisini YENİDEN KULLANMIYOR
+  // — referans tasarım bilinçli olarak soğuk gri-mavi bir zemin istiyor,
+  // o yüzden ayrı bir token seti. `dashboardCtaGradient`/
+  // `dashboardProgressGradient`/mor-pembe vurgu renkleri İKİ modda da AYNI
+  // kalıyor (yukarıdaki `dashboardViolet*`/`dashboardPink*` zaten paylaşılıyor).
+  // ==========================================================================
+  static const Color dashboardBackground = Color(0xFFF8FAFC);
+  static const Color dashboardSurface = Color(0xFFFFFFFF);
+  static const Color dashboardSurfaceElevated = Color(0xFFF1F5F9);
+  static const Color dashboardSubtleBorder = Color(0xFFE2E8F0);
+  static const Color dashboardTextPrimary = Color(0xFF0F172A);
+  static const Color dashboardTextMuted = Color(0xFF64748B);
+
+  // ==========================================================================
   // Spacing skalası — 4/8/12/16/24/32. Yeni bir SizedBox/EdgeInsets
   // yazarken rastgele bir sayı yerine bunlardan birini kullan.
   // ==========================================================================
