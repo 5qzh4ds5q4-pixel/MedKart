@@ -295,6 +295,12 @@ void main() {
   group('ızgara düzeni — dar ekran', () {
     // Bu testlerin asıl işi TAŞMA (RenderFlex overflow) yakalamak: dar
     // ekranda kartlar yan yana sığmazsa Flutter test sırasında hata atar.
+    // "380" genişliği 2026-08-11'den beri "gerçek dar mobil genişlik" +
+    // sabit `AppShell` sidebar'ının (80px) TOPLAMI — `StatsScreen` artık
+    // `AppShell` içinde, içerik genişliği her zaman viewport - 80. Sabiti
+    // 380 bırakıp sidebar'ı hesaba katmasaydık test aslında 300px içerik
+    // genişliğini sınardı (gerçek mobil senaryodan dar), yanlış pozitif
+    // taşma yakalardı.
     testWidgets('mobil genişlikte dört metrik kartı da taşmadan kurulur', (
       tester,
     ) async {
@@ -302,7 +308,7 @@ void main() {
         tester,
         todayCount: 5,
         goal: 20,
-        surface: const Size(380, 900),
+        surface: const Size(460, 900),
       );
 
       expect(find.byKey(StatsScreen.metricStreakKey), findsOneWidget);
@@ -318,7 +324,7 @@ void main() {
       await _pumpStats(
         tester,
         todayCount: 5,
-        surface: const Size(380, 900),
+        surface: const Size(460, 900),
       );
 
       final streak = tester.getTopLeft(
@@ -353,7 +359,7 @@ void main() {
       await _pumpStats(
         tester,
         todayCount: 5,
-        surface: const Size(380, 900),
+        surface: const Size(460, 900),
       );
 
       final takvim = tester.getTopLeft(find.text('Çalışma takvimi'));

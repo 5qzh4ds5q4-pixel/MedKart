@@ -208,7 +208,17 @@ void main() {
     await _tap(tester, _deckChip('Anatomi'));
 
     // Varsayılanlar yerinde: 20 soru, 20 dakika.
-    expect(_isSelected(tester, find.widgetWithText(ChoiceChip, '20')), isTrue);
-    expect(find.widgetWithText(TextField, '20'), findsOneWidget);
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+          .selected,
+      {20},
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(ExamSimSetupScreen.minutesValueKey))
+          .data,
+      '20',
+    );
   });
 }

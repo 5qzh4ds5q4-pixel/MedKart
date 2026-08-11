@@ -267,7 +267,10 @@ void main() {
     // Çalışma butonu filtre kipine geçer.
     expect(find.textContaining('Filtreyle Çalış'), findsOneWidget);
 
-    // Temizle → hepsi geri gelir.
+    // Temizle → hepsi geri gelir. "Zorluk"/"Konular" grup etiketleri
+    // (2026-08-11) çubuğu genişletti, "Temizle" artık kaydırmadan
+    // tıklanabilir alanın dışında kalabiliyor.
+    await tester.ensureVisible(find.text('Temizle'));
     await tester.tap(find.text('Temizle'));
     await tester.pumpAndSettle();
     expect(find.text('Q-kolay-kalp'), findsOneWidget);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/study_log.dart';
+import '../theme/app_theme.dart';
 import 'horizontal_wheel_scroll.dart';
 
 /// Bir günün çalışma yoğunluk kademesi.
@@ -61,9 +62,11 @@ class StudyHeatmap extends StatelessWidget {
   /// "Yoğun" kademenin başladığı kart sayısı.
   static const int highMinCount = 25;
 
-  // ---- Kademe opaklıkları ----
-  static const double lowAlpha = 0.35;
-  static const double mediumAlpha = 0.65;
+  // ---- Yoğunluk skalasındaki interpolasyon noktaları (0=açık violet,
+  // 1=koyu pembe) — "low"/"medium" bu skalanın arasında bir nokta, "high"
+  // skalanın ucu.
+  static const double _lowT = 0.33;
+  static const double _mediumT = 0.66;
 
   static const double _cell = 14;
   static const double _gap = 4;
@@ -76,14 +79,25 @@ class StudyHeatmap extends StatelessWidget {
     return HeatLevel.high;
   }
 
-  /// Kademenin tema rengini verir — sabit renk YOK, hepsi tema token'ı.
-  static Color colorForLevel(ColorScheme scheme, HeatLevel level) =>
-      switch (level) {
-        HeatLevel.none => scheme.surfaceContainerHighest,
-        HeatLevel.low => scheme.primary.withValues(alpha: lowAlpha),
-        HeatLevel.medium => scheme.primary.withValues(alpha: mediumAlpha),
-        HeatLevel.high => scheme.primary,
-      };
+  /// Kademenin rengini verir — sabit renk YOK, hepsi `AppTheme` dashboard
+  /// token'ı. 2026-08-11 amber/gold temizliği: eskiden `scheme.primary`
+  /// (uygulamanın amber marka rengi) kullanıyordu; artık açık violet'ten
+  /// koyu pembeye giden bir skala (`AppTheme.dashboardViolet` →
+  /// `AppTheme.dashboardPinkHot`) — dashboard'un CTA gradyanıyla (`AppTheme.
+  /// dashboardCtaGradient`) AYNI iki renk ailesi, burada alfa yerine gerçek
+  /// renk interpolasyonu kullanılıyor çünkü "az/çok" ekseni artık tek bir
+  /// rengin koyuluğu DEĞİL, iki rengin arası.
+  static Color colorForLevel(HeatLevel level, {required bool isDark}) {
+    final empty = isDark ? AppTheme.heroNeutralFill : AppTheme.dashboardSurfaceElevated;
+    return switch (level) {
+      HeatLevel.none => empty,
+      HeatLevel.low =>
+        Color.lerp(AppTheme.dashboardViolet, AppTheme.dashboardPinkHot, _lowT)!,
+      HeatLevel.medium =>
+        Color.lerp(AppTheme.dashboardViolet, AppTheme.dashboardPinkHot, _mediumT)!,
+      HeatLevel.high => AppTheme.dashboardPinkHot,
+    };
+  }
 
   /// Bir günün kare anahtarı — testler belirli bir günü bununla bulur.
   static ValueKey<String> dayKey(DateTime day) => ValueKey(
@@ -161,8 +175,8 @@ class StudyHeatmap extends StatelessWidget {
         // Karelerin ne anlama geldiğini bir cümlede söyle — ızgara kendi
         // başına okunmuyordu.
         Text(
-          'Her kare bir gün. Ne kadar koyu, o kadar az çalışılmış; '
-          'ne kadar amber, o kadar çok.',
+          'Her kare bir gün. Ne kadar soluk, o kadar az çalışılmış; '
+          'ne kadar koyu, o kadar çok.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -201,8 +215,9 @@ class StudyHeatmap extends StatelessWidget {
     }
 
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final count = log.countOn(day);
-    final color = colorForLevel(scheme, levelFor(count));
+    final color = colorForLevel(levelFor(count), isDark: isDark);
     final isToday = day == today;
     final label = count == 0
         ? '${_dayLabel(day)} · çalışma yok'
@@ -216,9 +231,12 @@ class StudyHeatmap extends StatelessWidget {
       ),
     );
 
-    // Bugün: amber halka + araya yüzey rengi boşluk. Boşluk şart — halka ile
-    // dolgu ikisi de primary olduğunda (bugün 25+ kart çalışılmışsa) halka
-    // dolguya karışır ve işaret görünmez olurdu.
+    // Bugün: mor halka + araya yüzey rengi boşluk. Boşluk şart — halka
+    // "high" dolgusuyla (pembe) karışmasın diye AYRI bir renk ailesinden
+    // (mor, `dashboardVioletDeep`) — eskiden ikisi de `scheme.primary`
+    // (amber) olduğu için bugün 25+ kart çalışılmışsa halka dolguya
+    // karışıp görünmez olurdu, boşluk o yüzden vardı; artık renkler zaten
+    // ayrı ama boşluk yine de duruyor (ekstra güvenlik payı).
     final Widget cell = isToday
         ? Container(
             key: todayRingKey,
@@ -228,7 +246,10 @@ class StudyHeatmap extends StatelessWidget {
             decoration: BoxDecoration(
               color: scheme.surface,
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: scheme.primary, width: 1.5),
+              border: Border.all(
+                color: AppTheme.dashboardVioletDeep,
+                width: 1.5,
+              ),
             ),
             child: fill,
           )
@@ -333,6 +354,7 @@ class _Legend extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     // Eskisinden belirgin: kutular 12→16, yazı labelSmall→bodySmall.
     Widget box(HeatLevel level) => Container(
@@ -340,7 +362,7 @@ class _Legend extends StatelessWidget {
       height: 16,
       margin: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
-        color: StudyHeatmap.colorForLevel(scheme, level),
+        color: StudyHeatmap.colorForLevel(level, isDark: isDark),
         borderRadius: BorderRadius.circular(4),
       ),
     );

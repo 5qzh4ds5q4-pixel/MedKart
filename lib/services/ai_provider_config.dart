@@ -20,11 +20,4 @@ enum AiProvider { gemini, deepseek, glm }
 /// `glm_transport.dart`, `ai-proxy`'nin `glm` dalı) yerinde duruyor ve
 /// ileride yeniden değerlendirilebilir — yalnızca aktif seçim değil.
 ///
-/// ┌──────────────────────────────────────────────────────────────────────┐
-/// │ GEÇİCİ — 2026-08-07: kullanıcının isteğiyle `glm`e alındı (v23 prompt │
-/// │ sıkılaştırmalarının el yazısı etiketlemesine etkisini ölçmek için).  │
-/// │ TEST BİTİNCE `AiProvider.gemini`'ye GERİ AL. Production varsayılanı  │
-/// │ gemini'dir; bu satır glm'de unutulursa tüm kart üretimi OpenRouter'a │
-/// │ gider.                                                               │
-/// └──────────────────────────────────────────────────────────────────────┘
-const AiProvider activeAiProvider = AiProvider.glm;
+const AiProvider activeAiProvider = AiProvider.gemini;

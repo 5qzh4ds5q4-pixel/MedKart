@@ -73,23 +73,23 @@ void main() {
     });
 
     test('kademeler birbirinden FARKLI renk üretir', () {
-      const scheme = ColorScheme.light();
       final colors = {
         for (final level in HeatLevel.values)
-          StudyHeatmap.colorForLevel(scheme, level),
+          StudyHeatmap.colorForLevel(level, isDark: false),
       };
       expect(colors, hasLength(HeatLevel.values.length));
     });
 
-    test('en yüksek kademe tam primary, boş gün yüzey tonu', () {
-      const scheme = ColorScheme.light();
+    test('en yüksek kademe tam koyu pembe, boş gün nötr yüzey', () {
+      // 2026-08-11 amber/gold temizliği: eskiden `scheme.primary` (amber)
+      // ve `scheme.surfaceContainerHighest` idi.
       expect(
-        StudyHeatmap.colorForLevel(scheme, HeatLevel.high),
-        scheme.primary,
+        StudyHeatmap.colorForLevel(HeatLevel.high, isDark: false),
+        AppTheme.dashboardPinkHot,
       );
       expect(
-        StudyHeatmap.colorForLevel(scheme, HeatLevel.none),
-        scheme.surfaceContainerHighest,
+        StudyHeatmap.colorForLevel(HeatLevel.none, isDark: false),
+        AppTheme.dashboardSurfaceElevated,
       );
     });
   });
@@ -105,26 +105,26 @@ void main() {
 
       await tester.pumpWidget(_wrap(StudyHeatmap(log: log, now: today)));
 
-      // Kıyas AppTheme.light'ın gerçek şemasıyla yapılır.
-      final rendered = Theme.of(
-        tester.element(find.byType(StudyHeatmap)),
-      ).colorScheme;
+      // Kıyas AppTheme.light'ın gerçek brightness'ıyla yapılır.
+      final isDark =
+          Theme.of(tester.element(find.byType(StudyHeatmap))).brightness ==
+          Brightness.dark;
 
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 1))),
-        StudyHeatmap.colorForLevel(rendered, HeatLevel.low),
+        StudyHeatmap.colorForLevel(HeatLevel.low, isDark: isDark),
       );
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 2))),
-        StudyHeatmap.colorForLevel(rendered, HeatLevel.medium),
+        StudyHeatmap.colorForLevel(HeatLevel.medium, isDark: isDark),
       );
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 3))),
-        StudyHeatmap.colorForLevel(rendered, HeatLevel.high),
+        StudyHeatmap.colorForLevel(HeatLevel.high, isDark: isDark),
       );
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 4))),
-        StudyHeatmap.colorForLevel(rendered, HeatLevel.none),
+        StudyHeatmap.colorForLevel(HeatLevel.none, isDark: isDark),
       );
     });
 
@@ -137,17 +137,17 @@ void main() {
 
       await tester.pumpWidget(_wrap(StudyHeatmap(log: log, now: today)));
 
-      final rendered = Theme.of(
-        tester.element(find.byType(StudyHeatmap)),
-      ).colorScheme;
+      final isDark =
+          Theme.of(tester.element(find.byType(StudyHeatmap))).brightness ==
+          Brightness.dark;
 
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 1))),
-        StudyHeatmap.colorForLevel(rendered, HeatLevel.low),
+        StudyHeatmap.colorForLevel(HeatLevel.low, isDark: isDark),
       );
       expect(
         _cellColor(tester, today.subtract(const Duration(days: 1))),
-        isNot(StudyHeatmap.colorForLevel(rendered, HeatLevel.high)),
+        isNot(StudyHeatmap.colorForLevel(HeatLevel.high, isDark: isDark)),
       );
     });
 
@@ -273,9 +273,10 @@ void main() {
       );
     });
 
-    testWidgets('halka rengi amber (primary) ve dolgudan ayrı', (tester) async {
-      // Bugün 40 kart = "yüksek" → dolgu da primary. Halka yine de ayırt
-      // edilebilir olmalı (arada yüzey rengi boşluk var).
+    testWidgets('halka rengi mor ve dolgudan ayrı', (tester) async {
+      // Bugün 40 kart = "yüksek" → dolgu `dashboardPinkHot`. Halka AYRI bir
+      // renk ailesinden (mor, `dashboardVioletDeep`) — 2026-08-11 amber/gold
+      // temizliği: eskiden ikisi de `scheme.primary` (amber) idi.
       final log = _logRelativeTo(today, {0: 40});
       await tester.pumpWidget(_wrap(StudyHeatmap(log: log, now: today)));
 
@@ -287,7 +288,7 @@ void main() {
         tester.element(find.byType(StudyHeatmap)),
       ).colorScheme;
 
-      expect(decoration.border!.top.color, scheme.primary);
+      expect(decoration.border!.top.color, AppTheme.dashboardVioletDeep);
       // Halka ile dolgu arasındaki boşluk yüzey renginde.
       expect(decoration.color, scheme.surface);
     });
@@ -317,8 +318,8 @@ void main() {
 
       expect(
         find.text(
-          'Her kare bir gün. Ne kadar koyu, o kadar az çalışılmış; '
-          'ne kadar amber, o kadar çok.',
+          'Her kare bir gün. Ne kadar soluk, o kadar az çalışılmış; '
+          'ne kadar koyu, o kadar çok.',
         ),
         findsOneWidget,
       );

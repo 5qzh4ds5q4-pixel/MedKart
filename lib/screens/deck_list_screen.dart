@@ -15,6 +15,7 @@ import '../state/study_settings.dart';
 import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
 import '../utils/require_auth.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/card_chips.dart';
 import '../widgets/content_shell.dart';
 import '../widgets/deck_name_dialog.dart';
@@ -22,7 +23,6 @@ import '../widgets/profile_bubble.dart';
 import 'card_list_screen.dart';
 import 'exam_sim_screen.dart';
 import 'legal_screen.dart';
-import 'mcq_setup_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'study_screen.dart';
@@ -137,14 +137,16 @@ class DeckListScreen extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Ayarlar',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
             ),
             const ProfileBubble(),
           ],
         ),
-        body: SafeArea(child: _EmptyState(onCreate: () => _createDeck(context))),
+        body: SafeArea(
+          child: _EmptyState(onCreate: () => _createDeck(context)),
+        ),
       );
 
       // Landing/karşılama (boş durum) uygulamanın açık/koyu tema tercihinden
@@ -154,101 +156,61 @@ class DeckListScreen extends StatelessWidget {
       return Theme(data: AppTheme.dark, child: scaffold);
     }
 
-    // Dolu dashboard: sol sidebar + (Scaffold.appBar DEĞİL) sadeleştirilmiş
-    // üst şerit — 2026-08-10, "sağ üstte sıkışık ikonlar yerine sol sabit
-    // sidebar" isteği. Eskiden AppBar'da duran İstatistik/Kendini Test Et/
-    // Ayarlar eylemleri artık `_SideNavBar`'a taşındı (bkz. o widget'ın
-    // yorumu); Deneme Sınavı AppBar'da hiç yoktu — zaten dashboard
-    // gövdesindeki "Deneme Sınavı" kısayol kartından erişiliyordu, sidebar
-    // referans tasarımında da bu ikon yok, kaldırılmadı.
-    return Scaffold(
+    // Dolu dashboard: `AppShell` (sol sidebar + üst şerit slotu) — 2026-08-11,
+    // Deneme Sınavı kurulum ekranının sidebar'ı hiç OLMADIĞI fark edilince
+    // (`ExamSimSetupScreen` hâlâ eski `Scaffold(appBar:...)` kalıbındaydı)
+    // her ana ekranın kendi Row/SideNavBar kodunu ayrı ayrı yazması yerine
+    // ORTAK bir kabuğa çıkarıldı — bkz. `app_shell.dart` doc yorumu. Görsel
+    // olarak HİÇBİR ŞEY değişmedi, yalnızca kod taşındı.
+    return AppShell(
+      active: SideNavItem.home,
+      topBar: const _DashboardTopBar(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _createDeck(context),
         icon: const Icon(Icons.add),
         label: const Text('Yeni Deste'),
       ),
-      body: SafeArea(
-        child: ColoredBox(
-          // Dashboard'ın sayfa zemini iki modda da AYRI, açıkça boyanmış
-          // bir renk — koyu modda bu zaten ambient `AppTheme.dark`
-          // yüzeyiyle (`heroBackground`) aynı değer, o yüzden koyu moda
-          // görsel bir etkisi yok (bkz. "dark mode koduna dokunma").
-          // Açık modda ise ambient `AppTheme.light` yüzeyinden (sıcak
-          // krem) FARKLI, referans tasarımın soğuk gri-mavi zemini
-          // (`dashboardBackground`) burada devreye girer.
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppTheme.heroBackground
-              : AppTheme.dashboardBackground,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SideNavBar(
-                onOpenQuiz: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const McqSetupScreen()),
-                ),
-                onOpenStats: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const StatsScreen()),
-                ),
-                onOpenSettings: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    const _DashboardTopBar(),
-                    Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          // Koyu/açık mod ikisi de aynı kart-ızgara dashboard
-                          // dilini kullanır (bkz. "medkart koyu/açık mod
-                          // dashboard" referans tasarımları); yalnızca renk
-                          // token'ları değişir.
-                          if (Theme.of(context).brightness ==
-                              Brightness.dark) {
-                            return _DarkDashboardBody(
-                              onCreateDeck: () => _createDeck(context),
-                              onOpenDeck: (deck) => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      CardListScreen(deckId: deck.id),
-                                ),
-                              ),
-                              onRenameDeck: (deck) =>
-                                  _renameDeck(context, deck),
-                              onDeleteDeck: (deck) =>
-                                  _deleteDeck(context, deck),
-                              onSetExamDate: (deck) =>
-                                  _editExamDate(context, deck),
-                              onClearExamDate: (deck) =>
-                                  _clearExamDate(context, deck),
-                            );
-                          }
-                          return _LightDashboardBody(
-                            onCreateDeck: () => _createDeck(context),
-                            onOpenDeck: (deck) => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CardListScreen(deckId: deck.id),
-                              ),
-                            ),
-                            onRenameDeck: (deck) => _renameDeck(context, deck),
-                            onDeleteDeck: (deck) => _deleteDeck(context, deck),
-                            onSetExamDate: (deck) =>
-                                _editExamDate(context, deck),
-                            onClearExamDate: (deck) =>
-                                _clearExamDate(context, deck),
-                          );
-                        },
-                      ),
+      body: Builder(
+        builder: (context) {
+          // Koyu/açık mod ikisi de aynı kart-ızgara dashboard dilini kullanır
+          // (bkz. "medkart koyu/açık mod dashboard" referans tasarımları);
+          // yalnızca renk token'ları değişir. Alt bilgi (`_DashboardFooter`)
+          // dashboard gövdesiyle AYNI `Column`'da, sabit (flex olmayan) son
+          // çocuk olarak duruyor — içerik ne kadar kısa olursa olsun
+          // viewport'un en altında kalsın diye (bkz. o widget'ın yorumu).
+          final dashboardBody = Theme.of(context).brightness == Brightness.dark
+              ? _DarkDashboardBody(
+                  onCreateDeck: () => _createDeck(context),
+                  onOpenDeck: (deck) => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CardListScreen(deckId: deck.id),
                     ),
-                    const _DashboardFooter(),
-                  ],
-                ),
-              ),
+                  ),
+                  onRenameDeck: (deck) => _renameDeck(context, deck),
+                  onDeleteDeck: (deck) => _deleteDeck(context, deck),
+                  onSetExamDate: (deck) => _editExamDate(context, deck),
+                  onClearExamDate: (deck) => _clearExamDate(context, deck),
+                )
+              : _LightDashboardBody(
+                  onCreateDeck: () => _createDeck(context),
+                  onOpenDeck: (deck) => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CardListScreen(deckId: deck.id),
+                    ),
+                  ),
+                  onRenameDeck: (deck) => _renameDeck(context, deck),
+                  onDeleteDeck: (deck) => _deleteDeck(context, deck),
+                  onSetExamDate: (deck) => _editExamDate(context, deck),
+                  onClearExamDate: (deck) => _clearExamDate(context, deck),
+                );
+
+          return Column(
+            children: [
+              Expanded(child: dashboardBody),
+              const _DashboardFooter(),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -695,9 +657,7 @@ class _DarkDashboardBody extends StatelessWidget {
         ? null
         : store.deckById(paceWarning.deckId);
     final weakestTopic = store.weakestTopicInfo;
-    final readinessByDeck = {
-      for (final r in store.deckReadiness) r.deckId: r,
-    };
+    final readinessByDeck = {for (final r in store.deckReadiness) r.deckId: r};
 
     void goStudyToday() => requireAuth(
       context,
@@ -748,9 +708,8 @@ class _DarkDashboardBody extends StatelessWidget {
                     isPriorityModeOn: studySettings.isPriorityMode(
                       paceWarning.deckId,
                     ),
-                    onTogglePriorityMode: () => context
-                        .read<StudySettings>()
-                        .setPriorityMode(
+                    onTogglePriorityMode: () =>
+                        context.read<StudySettings>().setPriorityMode(
                           paceWarning.deckId,
                           !studySettings.isPriorityMode(paceWarning.deckId),
                         ),
@@ -922,7 +881,11 @@ class _DarkHeroRow extends StatelessWidget {
     if (!isWide) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [hero, const SizedBox(height: AppTheme.space16), proPlan],
+        children: [
+          hero,
+          const SizedBox(height: AppTheme.space16),
+          proPlan,
+        ],
       );
     }
 
@@ -1019,10 +982,7 @@ class _DarkHeroBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppTheme.space16),
-          _DarkGradientButton(
-            label: 'Çalışmaya Başla',
-            onTap: onStartStudy,
-          ),
+          _DarkGradientButton(label: 'Çalışmaya Başla', onTap: onStartStudy),
         ],
       ),
     );
@@ -1899,180 +1859,8 @@ class _DarkDeckCard extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// KOYU/AÇIK MOD ORTAK — sol sabit sidebar navigasyonu.
-// 2026-08-10, referans tasarımların (`fixed left-0 top-0 h-screen w-20`)
-// eskiden AppBar'ın sağ üstüne sıkıştırılmış eylemlerini (İstatistik/
-// Kendini Test Et/Ayarlar) yerine getiriyor. Yalnızca DOLU dashboard'ta
-// var — boş/karşılama ekranı bu sidebar'ı hiç görmüyor (bkz.
-// `DeckListScreen.build` doc yorumu).
-// ============================================================================
-class _SideNavBar extends StatelessWidget {
-  const _SideNavBar({
-    required this.onOpenQuiz,
-    required this.onOpenStats,
-    required this.onOpenSettings,
-  });
-
-  final VoidCallback onOpenQuiz;
-  final VoidCallback onOpenStats;
-  final VoidCallback onOpenSettings;
-
-  static const double width = 80;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        // Koyu modda kullanıcının verdiği tam hex (#13181F) — sayfa
-        // zemininden (`heroBackground`, #0D1321) hafif farklı, bilinçli.
-        color: isDark ? const Color(0xFF13181F) : AppTheme.dashboardSurface,
-        border: isDark
-            ? null
-            : const Border(
-                right: BorderSide(color: AppTheme.dashboardSubtleBorder),
-              ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: AppTheme.space16),
-            Text(
-              'M',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.dashboardVioletDeep,
-              ),
-            ),
-            const SizedBox(height: AppTheme.space24),
-            _SideNavIcon(
-              icon: Icons.home,
-              label: 'Ana Sayfa',
-              active: true,
-              isDark: isDark,
-              // Zaten bu ekrandayız — sağlam bir "ana sayfaya dön" hedefi
-              // yok, dokunma yalnızca dokunsal geri bildirim verir.
-              onTap: () {},
-            ),
-            _SideNavIcon(
-              icon: Icons.library_books_outlined,
-              label: 'Destelerim',
-              active: false,
-              isDark: isDark,
-              // Uygulamada ayrı bir "kütüphane" ekranı yok — deste ızgarası
-              // zaten bu ekranın kendisinde. Ayrı bir ekran icat etmek yerine
-              // (kapsam dışı) burada da aynı ekranda kalınıyor.
-              onTap: () {},
-            ),
-            _SideNavIcon(
-              icon: Icons.quiz_outlined,
-              label: 'Kendini Test Et',
-              active: false,
-              isDark: isDark,
-              onTap: onOpenQuiz,
-            ),
-            _SideNavIcon(
-              icon: Icons.insights_outlined,
-              label: 'İstatistikler',
-              active: false,
-              isDark: isDark,
-              onTap: onOpenStats,
-            ),
-            const Spacer(),
-            _SideNavIcon(
-              icon: Icons.settings_outlined,
-              label: 'Ayarlar',
-              active: false,
-              isDark: isDark,
-              onTap: onOpenSettings,
-            ),
-            const SizedBox(height: AppTheme.space16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SideNavIcon extends StatelessWidget {
-  const _SideNavIcon({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = AppTheme.dashboardVioletDeep;
-    final inactiveColor = isDark
-        ? AppTheme.textTertiaryDark
-        : AppTheme.dashboardTextMuted;
-    final activeBackground = isDark
-        ? AppTheme.dashboardVioletDeep.withValues(alpha: 0.20)
-        : const Color(0xFFEDE9FE);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Tooltip(
-        message: label,
-        // Dashboard tasarım sistemi: tooltip her iki temada da aynı SABİT
-        // açık kart gibi görünüyor (isDark'a göre dallanmıyor) — OS'un
-        // kendi tooltip'leri de genelde uygulama temasından bağımsız açık
-        // durur, aynı desen burada bilinçli tekrarlandı. Konumlandırma
-        // (sidebar'ın sağında) ekstra kod GEREKTİRMEDİ: sidebar zaten ekranın
-        // sol kenarına yapışık olduğu için Tooltip'in kendi ekran-kenarı
-        // kenetleme mantığı (positionDependentBox) tooltip'i otomatik olarak
-        // sağa doğru iter. Hover (masaüstü/web) ve uzun basma (dokunmatik)
-        // tetikleyicileri de Tooltip'in VARSAYILAN davranışı — ayrıca
-        // triggerMode ayarlamaya gerek yok.
-        decoration: BoxDecoration(
-          color: AppTheme.dashboardSurfaceElevated,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        textStyle: const TextStyle(
-          color: AppTheme.dashboardTextPrimary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: active ? activeBackground : null,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                size: 22,
-                color: active ? activeColor : inactiveColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Sidebar'ın sağındaki sadeleştirilmiş üst şerit — eskiden AppBar'da duran
-/// İstatistik/Kendini Test Et/Ayarlar ikonları artık `_SideNavBar`'da;
+/// İstatistik/Kendini Test Et/Ayarlar ikonları artık `SideNavBar`'da;
 /// burada YALNIZCA profil balonu kalıyor. Bildirim zili BİLİNÇLİ olarak
 /// EKLENMEDİ — uygulamada gerçek bir bildirim sistemi yok, işlevi olmayan
 /// bir zil ikonu koymak yerine tamamen kaldırıldı (kullanıcının verdiği iki
@@ -2107,22 +1895,30 @@ class _DashboardFooter extends StatelessWidget {
   const _DashboardFooter();
 
   void _openLegal(BuildContext context, String title, String content) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => LegalScreen(title: title, content: content)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LegalScreen(title: title, content: content),
+      ),
+    );
   }
 
   void _showSupportInfo(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Destek: henüz ayrı bir kanal yok, yakında eklenecek.')),
+      const SnackBar(
+        content: Text('Destek: henüz ayrı bir kanal yok, yakında eklenecek.'),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final brandColor = isDark ? AppTheme.textPrimaryDark : AppTheme.dashboardVioletDeep;
-    final mutedColor = isDark ? AppTheme.textTertiaryDark : AppTheme.dashboardTextMuted;
+    final brandColor = isDark
+        ? AppTheme.textPrimaryDark
+        : AppTheme.dashboardVioletDeep;
+    final mutedColor = isDark
+        ? AppTheme.textTertiaryDark
+        : AppTheme.dashboardTextMuted;
 
     return ContentShell(
       maxWidth: AppTheme.dashboardMaxWidth,
@@ -2139,7 +1935,11 @@ class _DashboardFooter extends StatelessWidget {
         children: [
           Text(
             'MedKart',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: brandColor),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: brandColor,
+            ),
           ),
           Wrap(
             spacing: AppTheme.space16,
@@ -2150,7 +1950,10 @@ class _DashboardFooter extends StatelessWidget {
                   LegalContent.termsOfServiceTitle,
                   LegalContent.termsOfService,
                 ),
-                child: Text('Legal', style: TextStyle(fontSize: 12, color: mutedColor)),
+                child: Text(
+                  'Legal',
+                  style: TextStyle(fontSize: 12, color: mutedColor),
+                ),
               ),
               GestureDetector(
                 onTap: () => _openLegal(
@@ -2158,15 +1961,24 @@ class _DashboardFooter extends StatelessWidget {
                   LegalContent.privacyPolicyTitle,
                   LegalContent.privacyPolicy,
                 ),
-                child: Text('Gizlilik', style: TextStyle(fontSize: 12, color: mutedColor)),
+                child: Text(
+                  'Gizlilik',
+                  style: TextStyle(fontSize: 12, color: mutedColor),
+                ),
               ),
               GestureDetector(
                 onTap: () => _showSupportInfo(context),
-                child: Text('Destek', style: TextStyle(fontSize: 12, color: mutedColor)),
+                child: Text(
+                  'Destek',
+                  style: TextStyle(fontSize: 12, color: mutedColor),
+                ),
               ),
             ],
           ),
-          Text('© 2026 MedKart', style: TextStyle(fontSize: 12, color: mutedColor)),
+          Text(
+            '© 2026 MedKart',
+            style: TextStyle(fontSize: 12, color: mutedColor),
+          ),
         ],
       ),
     );
@@ -2230,17 +2042,24 @@ class _LightDashboardBody extends StatelessWidget {
     final dailyLimit = studySettings.dailyNewCardLimit;
     final priorityModeDeckIds = studySettings.priorityModeDeckIds;
     final dailyCount = store
-        .dailyQueue(newCardLimit: dailyLimit, priorityModeDeckIds: priorityModeDeckIds)
+        .dailyQueue(
+          newCardLimit: dailyLimit,
+          priorityModeDeckIds: priorityModeDeckIds,
+        )
         .length;
     final streak = store.studyLog.currentStreak(DateTime.now());
     final paceWarning = store.examPaceWarning();
-    final paceWarningDeck = paceWarning == null ? null : store.deckById(paceWarning.deckId);
+    final paceWarningDeck = paceWarning == null
+        ? null
+        : store.deckById(paceWarning.deckId);
     final weakestTopic = store.weakestTopicInfo;
     final readinessByDeck = {for (final r in store.deckReadiness) r.deckId: r};
 
     void goStudyToday() => requireAuth(
       context,
-      () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudyScreen())),
+      () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const StudyScreen())),
       reason: 'Çalışmaya başlamak için giriş yap — ilerlemen kaydedilsin.',
     );
 
@@ -2264,29 +2083,39 @@ class _LightDashboardBody extends StatelessWidget {
                 // CTA butonu ve isim metni yine de dark'la PAYLAŞILIYOR
                 // (`_DarkGradientButton`/`_DarkGreetingName`) — ikisi de
                 // opak bir zeminde zaten doğru render oluyor.
-                _LightHeroRow(streak: streak, isWide: isWide, onStartStudy: goStudyToday),
+                _LightHeroRow(
+                  streak: streak,
+                  isWide: isWide,
+                  onStartStudy: goStudyToday,
+                ),
                 const SizedBox(height: AppTheme.space24),
                 _LightShortcutRow(
                   isWide: isWide,
                   showTodayTile: store.cards.isNotEmpty,
                   dailyCardCount: dailyCount,
                   onTapToday: goStudyToday,
-                  onTapExam: () => Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const ExamSimSetupScreen())),
-                  onTapStats: () =>
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StatsScreen())),
+                  onTapExam: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ExamSimSetupScreen(),
+                    ),
+                  ),
+                  onTapStats: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const StatsScreen()),
+                  ),
                 ),
                 if (paceWarning != null) ...[
                   const SizedBox(height: AppTheme.space16),
                   _LightPaceWarningCard(
                     warning: paceWarning,
                     deckName: paceWarningDeck?.name,
-                    isPriorityModeOn: studySettings.isPriorityMode(paceWarning.deckId),
-                    onTogglePriorityMode: () => context.read<StudySettings>().setPriorityMode(
+                    isPriorityModeOn: studySettings.isPriorityMode(
                       paceWarning.deckId,
-                      !studySettings.isPriorityMode(paceWarning.deckId),
                     ),
+                    onTogglePriorityMode: () =>
+                        context.read<StudySettings>().setPriorityMode(
+                          paceWarning.deckId,
+                          !studySettings.isPriorityMode(paceWarning.deckId),
+                        ),
                   ),
                 ],
                 if (weakestTopic != null) ...[
@@ -2303,7 +2132,8 @@ class _LightDashboardBody extends StatelessWidget {
                           ),
                         ),
                       ),
-                      reason: 'Çalışmaya başlamak için giriş yap — ilerlemen kaydedilsin.',
+                      reason:
+                          'Çalışmaya başlamak için giriş yap — ilerlemen kaydedilsin.',
                     ),
                   ),
                 ],
@@ -2318,14 +2148,21 @@ class _LightDashboardBody extends StatelessWidget {
                 const SizedBox(height: AppTheme.space4),
                 Text(
                   'Toplam ${decks.length} deste',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.dashboardTextMuted),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.dashboardTextMuted,
+                  ),
                 ),
                 const SizedBox(height: AppTheme.space16),
                 _LightDeckGrid(
                   decks: decks,
                   store: store,
                   readinessByDeck: readinessByDeck,
-                  columns: responsiveValue<int>(size, mobile: 1, tablet: 2, desktop: 3),
+                  columns: responsiveValue<int>(
+                    size,
+                    mobile: 1,
+                    tablet: 2,
+                    desktop: 3,
+                  ),
                   onCreateDeck: onCreateDeck,
                   onOpenDeck: onOpenDeck,
                   onRenameDeck: onRenameDeck,
@@ -2364,7 +2201,11 @@ class _LightHeroRow extends StatelessWidget {
     if (!isWide) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [hero, const SizedBox(height: AppTheme.space16), proPlan],
+        children: [
+          hero,
+          const SizedBox(height: AppTheme.space16),
+          proPlan,
+        ],
       );
     }
 
@@ -2418,7 +2259,10 @@ class _LightHeroBanner extends StatelessWidget {
             children: [
               if (streak > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
@@ -2426,7 +2270,11 @@ class _LightHeroBanner extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_fire_department, size: 16, color: Colors.white),
+                      const Icon(
+                        Icons.local_fire_department,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '$streak Günlük Seri',
@@ -2503,7 +2351,10 @@ class _LightProPlanCard extends StatelessWidget {
                       gradient: AppTheme.dashboardCtaGradient,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.workspace_premium_outlined, color: Colors.white),
+                    child: const Icon(
+                      Icons.workspace_premium_outlined,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: AppTheme.space12),
                   Expanded(
@@ -2541,7 +2392,9 @@ class _LightProPlanCard extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Pro Plan yakında geliyor — haber vereceğiz.'),
+                    content: Text(
+                      'Pro Plan yakında geliyor — haber vereceğiz.',
+                    ),
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -2549,7 +2402,9 @@ class _LightProPlanCard extends StatelessWidget {
                   side: const BorderSide(color: AppTheme.dashboardSubtleBorder),
                   backgroundColor: AppTheme.dashboardSurfaceElevated,
                   minimumSize: const Size(0, 44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Bekleme Listesine Katıl'),
               ),
@@ -2583,7 +2438,9 @@ class _LightProFeatureRow extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.dashboardTextMuted),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppTheme.dashboardTextMuted,
+            ),
           ),
         ),
       ],
@@ -2614,13 +2471,20 @@ class _LightCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.dashboardSubtleBorder),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 6)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(
         color: Colors.transparent,
-        child: InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
   }
@@ -2658,7 +2522,9 @@ class _LightShortcutRow extends StatelessWidget {
           iconBackground: AppTheme.dashboardRed.withValues(alpha: 0.14),
           iconColor: const Color(0xFFDC2626),
           title: 'Bugün Çalış',
-          subtitle: dailyCardCount > 0 ? '$dailyCardCount kart hazır' : 'Bugün çalışılacak kart yok',
+          subtitle: dailyCardCount > 0
+              ? '$dailyCardCount kart hazır'
+              : 'Bugün çalışılacak kart yok',
           onTap: onTapToday,
         ),
       _LightShortcutTile(
@@ -2729,7 +2595,10 @@ class _LightShortcutTile extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: iconBackground, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: iconBackground,
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: iconColor, size: 22),
           ),
           const SizedBox(width: AppTheme.space16),
@@ -2749,7 +2618,9 @@ class _LightShortcutTile extends StatelessWidget {
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.dashboardTextMuted),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppTheme.dashboardTextMuted,
+                  ),
                 ),
               ],
             ),
@@ -2786,7 +2657,11 @@ class _LightPaceWarningCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.warning_amber_outlined, size: 18, color: Color(0xFFB45309)),
+              const Icon(
+                Icons.warning_amber_outlined,
+                size: 18,
+                color: Color(0xFFB45309),
+              ),
               const SizedBox(width: AppTheme.space8),
               Expanded(
                 child: Text(
@@ -2794,7 +2669,9 @@ class _LightPaceWarningCard extends StatelessWidget {
                   '${warning.daysLeft} gün kaldı. Bu tempoda yaklaşık '
                   '${warning.expectedCapacity} kart çalışabilirsin, elinde '
                   '${warning.remainingCards} kart var.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.dashboardTextPrimary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppTheme.dashboardTextPrimary,
+                  ),
                 ),
               ),
             ],
@@ -2804,8 +2681,14 @@ class _LightPaceWarningCard extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: onTogglePriorityMode,
-              style: TextButton.styleFrom(foregroundColor: AppTheme.dashboardVioletDeep),
-              child: Text(isPriorityModeOn ? 'Normal Moda Dön' : 'Öncelikli Kartlara Odaklan'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.dashboardVioletDeep,
+              ),
+              child: Text(
+                isPriorityModeOn
+                    ? 'Normal Moda Dön'
+                    : 'Öncelikli Kartlara Odaklan',
+              ),
             ),
           ),
         ],
@@ -2837,11 +2720,15 @@ class _LightWeakestTopicCard extends StatelessWidget {
               children: [
                 Text(
                   'En zor konun: ${info.topic}',
-                  style: theme.textTheme.titleMedium?.copyWith(color: AppTheme.dashboardTextPrimary),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: AppTheme.dashboardTextPrimary,
+                  ),
                 ),
                 Text(
                   '${info.cardCount} kart · Antrenman Yap',
-                  style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.dashboardTextMuted),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppTheme.dashboardTextMuted,
+                  ),
                 ),
               ],
             ),
@@ -2886,7 +2773,8 @@ class _LightDeckGrid extends StatelessWidget {
       counts[topic] = (counts[topic] ?? 0) + 1;
     }
     if (counts.isEmpty) return 'Genel';
-    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return sorted.first.key;
   }
 
@@ -2944,7 +2832,10 @@ class _LightCreateDeckCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: CustomPaint(
-          painter: const _DashedBorderPainter(color: Color(0xFFC4B5FD), radius: 16),
+          painter: const _DashedBorderPainter(
+            color: Color(0xFFC4B5FD),
+            radius: 16,
+          ),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2952,13 +2843,22 @@ class _LightCreateDeckCard extends StatelessWidget {
                 Container(
                   width: 56,
                   height: 56,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.add, size: 28, color: AppTheme.dashboardVioletDeep),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    size: 28,
+                    color: AppTheme.dashboardVioletDeep,
+                  ),
                 ),
                 const SizedBox(height: AppTheme.space12),
                 Text(
                   'Yeni Deste Oluştur',
-                  style: theme.textTheme.titleMedium?.copyWith(color: AppTheme.dashboardVioletDeep),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: AppTheme.dashboardVioletDeep,
+                  ),
                 ),
               ],
             ),
@@ -2998,7 +2898,10 @@ class _DashedBorderPainter extends CustomPainter {
       var distance = 0.0;
       while (distance < metric.length) {
         final next = distance + _dashWidth;
-        canvas.drawPath(metric.extractPath(distance, next.clamp(0, metric.length)), paint);
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
         distance = next + _gapWidth;
       }
     }
@@ -3022,10 +2925,22 @@ class _CategoryColors {
 }
 
 const List<_CategoryColors> _lightCategoryPalette = [
-  _CategoryColors(background: Color(0xFFFEF3C7), text: Color(0xFF92400E)), // amber
-  _CategoryColors(background: Color(0xFFFFE4E6), text: Color(0xFFBE123C)), // gül
-  _CategoryColors(background: Color(0xFFEDE9FE), text: Color(0xFF6D28D9)), // mor
-  _CategoryColors(background: Color(0xFFFCE7F3), text: Color(0xFFA21CAF)), // fuşya
+  _CategoryColors(
+    background: Color(0xFFFEF3C7),
+    text: Color(0xFF92400E),
+  ), // amber
+  _CategoryColors(
+    background: Color(0xFFFFE4E6),
+    text: Color(0xFFBE123C),
+  ), // gül
+  _CategoryColors(
+    background: Color(0xFFEDE9FE),
+    text: Color(0xFF6D28D9),
+  ), // mor
+  _CategoryColors(
+    background: Color(0xFFFCE7F3),
+    text: Color(0xFFA21CAF),
+  ), // fuşya
 ];
 
 /// [_DeckTile] eski sınıfıyla aynı biçim — sınav rozeti (bkz.
@@ -3086,9 +3001,13 @@ class _LightDeckCard extends StatelessWidget {
     final colors = _lightCategoryPalette[index % _lightCategoryPalette.length];
     final subjectIcon = _subjectIcons[index % _subjectIcons.length];
     final examDate = deck.examDate;
-    final daysLeft = examDate == null ? null : deck.daysUntilExam(DateTime.now());
+    final daysLeft = examDate == null
+        ? null
+        : deck.daysUntilExam(DateTime.now());
     final isCramming =
-        daysLeft != null && daysLeft >= 0 && daysLeft < SrsEngine.crammingThresholdDays;
+        daysLeft != null &&
+        daysLeft >= 0 &&
+        daysLeft < SrsEngine.crammingThresholdDays;
 
     return _LightCard(
       onTap: onOpen,
@@ -3113,7 +3032,10 @@ class _LightDeckCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: colors.background,
                           borderRadius: BorderRadius.circular(6),
@@ -3135,7 +3057,11 @@ class _LightDeckCard extends StatelessWidget {
               ),
               PopupMenuButton<_DeckAction>(
                 tooltip: 'Deste işlemleri',
-                icon: const Icon(Icons.more_vert, size: 18, color: AppTheme.dashboardTextMuted),
+                icon: const Icon(
+                  Icons.more_vert,
+                  size: 18,
+                  color: AppTheme.dashboardTextMuted,
+                ),
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 onSelected: (action) => switch (action) {
@@ -3159,7 +3085,9 @@ class _LightDeckCard extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.event_outlined),
                       title: Text(
-                        examDate == null ? 'Sınav tarihi belirle' : 'Sınav tarihini değiştir',
+                        examDate == null
+                            ? 'Sınav tarihi belirle'
+                            : 'Sınav tarihini değiştir',
                       ),
                     ),
                   ),
@@ -3213,7 +3141,11 @@ class _LightDeckCard extends StatelessWidget {
                   color: AppTheme.dashboardSurfaceElevated,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(subjectIcon, size: 18, color: AppTheme.dashboardTextMuted),
+                child: Icon(
+                  subjectIcon,
+                  size: 18,
+                  color: AppTheme.dashboardTextMuted,
+                ),
               ),
             ],
           ),
@@ -3224,7 +3156,9 @@ class _LightDeckCard extends StatelessWidget {
               children: [
                 Text(
                   'Öğrenilen',
-                  style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.dashboardTextMuted),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppTheme.dashboardTextMuted,
+                  ),
                 ),
                 Text(
                   '$readyPercent%',
@@ -3246,7 +3180,9 @@ class _LightDeckCard extends StatelessWidget {
                     FractionallySizedBox(
                       widthFactor: (readyPercent / 100).clamp(0.0, 1.0),
                       child: const DecoratedBox(
-                        decoration: BoxDecoration(gradient: AppTheme.dashboardProgressGradient),
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.dashboardProgressGradient,
+                        ),
                       ),
                     ),
                   ],
@@ -3259,9 +3195,13 @@ class _LightDeckCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  isCramming ? Icons.local_fire_department : Icons.event_outlined,
+                  isCramming
+                      ? Icons.local_fire_department
+                      : Icons.event_outlined,
                   size: 12,
-                  color: isCramming ? const Color(0xFFDC2626) : AppTheme.dashboardTextMuted,
+                  color: isCramming
+                      ? const Color(0xFFDC2626)
+                      : AppTheme.dashboardTextMuted,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
@@ -3274,7 +3214,9 @@ class _LightDeckCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: isCramming ? FontWeight.w700 : null,
-                      color: isCramming ? const Color(0xFFDC2626) : AppTheme.dashboardTextMuted,
+                      color: isCramming
+                          ? const Color(0xFFDC2626)
+                          : AppTheme.dashboardTextMuted,
                     ),
                   ),
                 ),
@@ -3284,7 +3226,9 @@ class _LightDeckCard extends StatelessWidget {
           ],
           Text(
             _metaLine,
-            style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.dashboardTextMuted),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: AppTheme.dashboardTextMuted,
+            ),
           ),
         ],
       ),

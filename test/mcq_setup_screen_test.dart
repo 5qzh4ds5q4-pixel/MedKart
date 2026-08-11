@@ -115,7 +115,9 @@ void main() {
   ) async {
     await _pump(tester);
 
-    expect(find.text('Çoktan seçmeli pratik'), findsOneWidget);
+    // Başlık artık iki satıra bölünmüş bir `Text.rich` ("Çoktan seçmeli" /
+    // "pratik" ayrı renkte) — bkz. `_BrandPanel`.
+    expect(find.text('Çoktan seçmeli\npratik'), findsOneWidget);
     expect(_isTopicSelected(tester, 'Tüm deste'), isTrue);
     // İlk destenin (Anatomi) konuları listelenir.
     expect(find.widgetWithText(RadioListTile<String?>, 'kol kasları'),
@@ -215,20 +217,29 @@ void main() {
   ) async {
     await _pump(tester);
 
-    final segmented = find.byType(SegmentedButton<int>);
-    expect(segmented, findsOneWidget);
+    for (final label in ['5', '10', '20']) {
+      expect(
+        find.widgetWithText(ChoiceChip, label),
+        findsOneWidget,
+        reason: 'soru sayısı seçeneği $label görünmeli',
+      );
+    }
     expect(
-      tester.widget<SegmentedButton<int>>(segmented).segments
-          .map((s) => (s.label as Text).data)
-          .toList(),
-      ['5', '10', '20'],
+      tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '10')).selected,
+      isTrue,
     );
-    expect(tester.widget<SegmentedButton<int>>(segmented).selected, {10});
 
     await tester.tap(find.text('20'));
     await tester.pump();
 
-    expect(tester.widget<SegmentedButton<int>>(segmented).selected, {20});
+    expect(
+      tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '20')).selected,
+      isTrue,
+    );
+    expect(
+      tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '10')).selected,
+      isFalse,
+    );
   });
 
   testWidgets('deste yoksa boş durum gösterilir', (tester) async {

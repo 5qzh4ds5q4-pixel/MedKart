@@ -589,6 +589,8 @@ class _FilterBar extends StatelessWidget {
             // anlatan bir işaret (tıklanabilir bir eylem DEĞİL — filtreyi
             // temizleme işi "Temizle" çipinde).
             _FilterBadge(active: filter.isActive),
+            const SizedBox(width: 10),
+            _groupLabel(context, 'Zorluk'),
             const SizedBox(width: 8),
             for (final d in CardDifficulty.values) ...[
               _chip(
@@ -596,8 +598,24 @@ class _FilterBar extends StatelessWidget {
                 label: d.label,
                 selected: filter.difficulties.contains(d),
                 onSelected: (v) => onChanged(filter.withDifficulty(d, v)),
+                // "Kolay/Orta/Zor" seçiliyken kendi zorluk anlamına gelen
+                // yeşil/amber/kırmızı vurgu alır (bkz. "kart liste ekranı.png"
+                // mockup'ı) — konu çiplerinden AYRI, onlar hep mor kalır
+                // (bkz. `_difficultyAccent` yorumu).
+                accent: _difficultyAccent(context, d),
               ),
               const SizedBox(width: 6),
+            ],
+            if (topics.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Container(
+                width: 1,
+                height: 20,
+                color: theme.colorScheme.outlineVariant,
+              ),
+              const SizedBox(width: 12),
+              _groupLabel(context, 'Konular'),
+              const SizedBox(width: 8),
             ],
             for (final t in topics) ...[
               _chip(
@@ -632,11 +650,15 @@ class _FilterBar extends StatelessWidget {
   /// görev tanımı). Koyu modda `AppTheme.dashboardSurfaceElevated` (açık mod
   /// token'ı) yerine en yakın MEVCUT koyu "elevated" yüzeyi (`heroNeutralFill`)
   /// kullanılıyor — yeni bir renk TANIMLANMADI, hepsi `AppTheme`'de zaten var.
+  ///
+  /// [accent] verilmezse (konu çipleri) seçili durum eskisi gibi mor kalır;
+  /// zorluk çipleri kendi semantik rengini (`_difficultyAccent`) geçirir.
   Widget _chip({
     required BuildContext context,
     required String label,
     required bool selected,
     required ValueChanged<bool> onSelected,
+    Color? accent,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final unselectedBg = isDark
@@ -645,12 +667,9 @@ class _FilterBar extends StatelessWidget {
     final unselectedFg = isDark
         ? AppTheme.textTertiaryDark
         : AppTheme.dashboardTextMuted;
-    final selectedBg = isDark
-        ? AppTheme.dashboardVioletDeep.withValues(alpha: 0.22)
-        : AppTheme.dashboardViolet.withValues(alpha: 0.18);
-    final selectedFg = isDark
-        ? AppTheme.dashboardViolet
-        : AppTheme.dashboardVioletDeep;
+    final resolvedAccent =
+        accent ?? (isDark ? AppTheme.dashboardViolet : AppTheme.dashboardVioletDeep);
+    final selectedBg = resolvedAccent.withValues(alpha: isDark ? 0.22 : 0.18);
 
     return FilterChip(
       label: Text(label),
@@ -663,10 +682,46 @@ class _FilterBar extends StatelessWidget {
       backgroundColor: unselectedBg,
       selectedColor: selectedBg,
       labelStyle: TextStyle(
-        color: selected ? selectedFg : unselectedFg,
+        color: selected ? resolvedAccent : unselectedFg,
         fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
       ),
     );
+  }
+
+  /// Küçük soluk grup başlığı ("Zorluk"/"Konular") — `kart liste ekranı.png`
+  /// mockup'ında çip gruplarının üstünde ayrı bir satırdaydı; burada aynı
+  /// kaydırılabilir satırın içine, grubun hemen başına gömülü (ayrı bir
+  /// başlık satırı çip grubunun GERÇEK genişliğini bilmediği için hizalamayı
+  /// tahmine dayandırırdı — bu daha basit ve hep doğru hizalanır).
+  Widget _groupLabel(BuildContext context, String text) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: isDark ? AppTheme.textTertiaryDark : AppTheme.dashboardTextMuted,
+      ),
+    );
+  }
+
+  /// Zorluk çipinin seçili rengi — konu çiplerinin morundan BİLİNÇLİ olarak
+  /// AYRI: "Kolay/Orta/Zor" kendi semantik rengini taşır (yeşil/amber/kırmızı),
+  /// tıpkı kart üzerindeki `DifficultyChip` rozetinde olduğu gibi (bkz.
+  /// `card_chips.dart`) — ikisi aynı kavramı farklı yerlerde gösteriyor, aynı
+  /// renk ailesini paylaşmalı. Yeni bir renk TANIMLANMADI: `accentGreen(OnLight)`/
+  /// `accentAmber(OnLight)` zaten `AppTheme`'de var, "Zor" için `colorScheme.error`
+  /// kullanılıyor (Material 3'ün kendi açık/koyu kırmızısı, ayrı bir token
+  /// gerektirmiyor).
+  Color _difficultyAccent(BuildContext context, CardDifficulty d) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return switch (d) {
+      CardDifficulty.kolay =>
+        isDark ? AppTheme.accentGreen : AppTheme.accentGreenOnLight,
+      CardDifficulty.orta =>
+        isDark ? AppTheme.accentAmber : AppTheme.accentAmberOnLight,
+      CardDifficulty.zor => Theme.of(context).colorScheme.error,
+    };
   }
 }
 
@@ -743,13 +798,68 @@ class _StudyBar extends StatelessWidget {
           child: ResponsiveBuilder(
             builder: (context, size) => SizedBox(
               width: responsiveButtonWidth(size),
-              child: FilledButton.icon(
-                onPressed: enabled ? onPressed : null,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(label),
+              child: _GradientCtaButton(
+                enabled: enabled,
+                onPressed: onPressed,
+                icon: Icons.play_arrow_rounded,
+                label: label,
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Uygulamanın diğer birincil CTA'larıyla (deste listesindeki "Çalışmaya
+/// Başla", Deneme Sınavı'ndaki "Sınavı Başlat") AYNI mor→pembe gradyan —
+/// 2026-08-11 düzeltmesi: bu buton eskiden tema varsayılanı (amber) renkteydi,
+/// sistemdeki TEK tutarsızlıktı. Gerçek bir `FilledButton` SARILARAK yapıldı
+/// (bkz. `exam_sim_screen.dart`'taki `_GradientStartButton` — aynı desen):
+/// iç butonun zemini saydam, asıl rengi dıştaki `Container`'ın gradyanı verir,
+/// bu sayede widget hâlâ gerçek bir `FilledButton` (testler `.onPressed`
+/// property'sini önceki gibi okuyabilir). Pasifken gradyan soluklaştırılır.
+class _GradientCtaButton extends StatelessWidget {
+  const _GradientCtaButton({
+    required this.enabled,
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = enabled
+        ? AppTheme.dashboardCtaGradient
+        : LinearGradient(
+            colors: [
+              AppTheme.dashboardVioletDeep.withValues(alpha: 0.35),
+              AppTheme.dashboardPinkHot.withValues(alpha: 0.35),
+            ],
+          );
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: FilledButton.icon(
+        onPressed: enabled ? onPressed : null,
+        icon: Icon(icon, color: Colors.white),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white.withValues(alpha: 0.7),
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );

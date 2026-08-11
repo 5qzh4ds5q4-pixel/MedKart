@@ -56,14 +56,8 @@ class FlashcardTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 12, right: 10),
-                  child: Text(
-                    '${index + 1}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  padding: const EdgeInsets.only(top: 8, right: 10),
+                  child: _NumberBadge(number: index + 1, isDark: isDark),
                 ),
                 Expanded(
                   child: Padding(
@@ -90,7 +84,7 @@ class FlashcardTile extends StatelessWidget {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 22, right: 8, top: 4),
+              padding: const EdgeInsets.only(left: 36, right: 8, top: 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -138,6 +132,44 @@ class FlashcardTile extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Kart sıra numarası — düz metin DEĞİL, kenarlıklı daire (bkz. "kart liste
+/// ekranı.png" mockup'ı). Yeni bir renk TANIMLANMADI: dashboard'un mevcut
+/// nötr "elevated" yüzey/kenarlık token'ları kullanılıyor (bu ekrandaki diğer
+/// ghost pillerle aynı aile — `_FilterBar._chip`'in seçilmemiş rengiyle
+/// tutarlı), mor vurgu değil, çünkü numara bir seçim/aktif durum değil.
+class _NumberBadge extends StatelessWidget {
+  const _NumberBadge({required this.number, required this.isDark});
+
+  final int number;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isDark ? AppTheme.heroNeutralFill : AppTheme.dashboardSurfaceElevated;
+    final border = isDark ? AppTheme.heroBorder : AppTheme.dashboardSubtleBorder;
+    final foreground = isDark ? AppTheme.textSecondaryDark : AppTheme.dashboardTextMuted;
+
+    return Container(
+      width: 26,
+      height: 26,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        shape: BoxShape.circle,
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        '$number',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: foreground,
         ),
       ),
     );

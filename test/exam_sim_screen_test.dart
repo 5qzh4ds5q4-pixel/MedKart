@@ -44,7 +44,7 @@ Widget _wrap(FlashcardStore store) {
   );
 }
 
-/// MCQ üretimine uygun (aynı konuda 4+ kart, kısa cevap dolu) bir havuz.
+/// MCQ üretimine uygun (aynı konuda 4+ kart, kısa cevabı dolu) bir havuz.
 List<Flashcard> _mcqReadyCards({
   String topic = 'kalp kapakları',
   int count = 5,
@@ -62,19 +62,41 @@ List<Flashcard> _mcqReadyCards({
     ),
 ];
 
-/// "Kapsam" bölümünü görünür alana getirir.
-///
-/// Ekrana "Deste" seçimi eklendikten (2026-08-04) sonra Kapsam kartı
-/// varsayılan test yüzeyinin altına düştü; `ListView` onu tembel oluşturduğu
-/// için çipler hiç build edilmiyordu. Kapsamla ilgilenen testler önce bunu
-/// çağırmalı.
+/// "Sınav Kapsamını Özelleştir" kartını görünür alana getirir (ekran ekli
+/// tek `ListView` — konu/sayfa çipleri varsayılan test yüzeyinin altında
+/// kalabilir).
 Future<void> _scrollToScope(WidgetTester tester) async {
   await tester.scrollUntilVisible(
-    find.text('Kapsam'),
+    find.text('Sınav Kapsamını Özelleştir'),
     200,
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pump();
+}
+
+Future<void> _scrollToStart(WidgetTester tester) async {
+  final finder = find.text('Sınavı Başlat');
+  // `scrollUntilVisible` yalnızca widget AĞACINDA var olana kadar kaydırır
+  // (sliver cache-extent'i yeterli olabilir); tıklanabilir olması için
+  // gerçekten fiziksel görünüm alanına girmesi lazım — bu yüzden ardından
+  // `ensureVisible` de çağrılıyor.
+  await tester.scrollUntilVisible(finder, 200, scrollable: find.byType(Scrollable).first);
+  await tester.ensureVisible(finder);
+  await tester.pump();
+}
+
+int _selectedQuestionCount(WidgetTester tester) =>
+    tester.widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>)).selected.first;
+
+String _minutesValue(WidgetTester tester) => tester
+    .widget<Text>(find.byKey(ExamSimSetupScreen.minutesValueKey))
+    .data!;
+
+Future<void> _tapMinutesDecrement(WidgetTester tester, {int times = 1}) async {
+  for (var i = 0; i < times; i++) {
+    await tester.tap(find.byKey(ExamSimSetupScreen.minutesDecrementKey));
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -95,87 +117,61 @@ void main() {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards())));
 
     for (final label in ['10', '20', '40']) {
-      expect(
-        find.widgetWithText(ChoiceChip, label),
-        findsOneWidget,
-        reason: 'soru sayısı seçeneği $label görünmeli',
-      );
+      expect(find.text(label), findsWidgets, reason: 'soru sayısı seçeneği $label görünmeli');
     }
 
-    final selected = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, '20'),
-    );
-    expect(selected.selected, isTrue);
+    expect(_selectedQuestionCount(tester), 20);
   });
 
   testWidgets('soru sayısı seçimi değiştirilebilir', (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards())));
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '40'));
+    await tester.tap(find.text('40'));
     await tester.pump();
 
-    expect(
-      tester
-          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '40'))
-          .selected,
-      isTrue,
-    );
-    expect(
-      tester
-          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '20'))
-          .selected,
-      isFalse,
-    );
+    expect(_selectedQuestionCount(tester), 40);
   });
 
-  String _minutesFieldText(WidgetTester tester) =>
-      tester.widget<TextField>(find.byType(TextField)).controller!.text;
-
-  testWidgets('süre alanı varsayılan soru sayısına göre önerilir (20 dk)',
+  testWidgets('süre varsayılan soru sayısına göre önerilir (20 dk)',
       (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards())));
 
     expect(find.text('Süre'), findsOneWidget);
-    expect(_minutesFieldText(tester), '20');
+    expect(_minutesValue(tester), '20');
   });
 
   testWidgets('soru sayısı değişince süre önerisi otomatik güncellenir',
       (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards())));
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '40'));
+    await tester.tap(find.text('40'));
     await tester.pump();
 
-    expect(_minutesFieldText(tester), '40');
+    expect(_minutesValue(tester), '40');
   });
 
-  testWidgets('süre elle girilince soru sayısı değişimi onu ezmez',
+  testWidgets('süre stepper ile elle değiştirilince soru sayısı değişimi onu ezmez',
       (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards())));
 
-    await tester.enterText(find.byType(TextField), '7');
-    await tester.pump();
-    expect(_minutesFieldText(tester), '7');
+    await _tapMinutesDecrement(tester); // 20 -> 15
+    expect(_minutesValue(tester), '15');
 
-    // Soru sayısı değişse bile kullanıcının girdiği süre korunur.
-    await tester.tap(find.widgetWithText(ChoiceChip, '40'));
+    // Soru sayısı değişse bile kullanıcının stepper'la ayarladığı süre korunur.
+    await tester.tap(find.text('40'));
     await tester.pump();
-    expect(_minutesFieldText(tester), '7');
+    expect(_minutesValue(tester), '15');
   });
 
-  testWidgets('elle girilen süre sınav ekranına geçer (05:00)', (tester) async {
+  testWidgets('stepper ile ayarlanan süre sınav ekranına geçer (05:00)',
+      (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards(count: 6))));
 
-    await tester.enterText(find.byType(TextField), '5');
-    await tester.pump();
+    await _tapMinutesDecrement(tester, times: 3); // 20 -> 15 -> 10 -> 5
+    expect(_minutesValue(tester), '5');
 
-    final start = find.text('Sınavı Başlat');
-    await tester.scrollUntilVisible(
-      start,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(start);
+    await _scrollToStart(tester);
+    await tester.tap(find.text('Sınavı Başlat'));
     await tester.pumpAndSettle();
 
     // Sınav ekranı timer'ı, henüz saniye geçmeden hedef süreyi gösterir.
@@ -230,13 +226,8 @@ void main() {
     // Konuda 4'ten az kart → McqGenerator soru üretemez.
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards(count: 3))));
 
-    final start = find.text('Sınavı Başlat');
-    await tester.scrollUntilVisible(
-      start,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(start);
+    await _scrollToStart(tester);
+    await tester.tap(find.text('Sınavı Başlat'));
     await tester.pump();
 
     expect(
@@ -249,13 +240,8 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_wrap(_storeWith(_mcqReadyCards(count: 6))));
 
-    final start = find.text('Sınavı Başlat');
-    await tester.scrollUntilVisible(
-      start,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(start);
+    await _scrollToStart(tester);
+    await tester.tap(find.text('Sınavı Başlat'));
     await tester.pumpAndSettle();
 
     expect(find.text('Sınavı Bitir'), findsOneWidget);

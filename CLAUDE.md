@@ -19,7 +19,18 @@ taramada `pdf_cache`'in yarım kalmış `model_version`/`prompt_version`
 sütunları da belgelendi; 2026-08-06'da GLM (OpenRouter) sağlayıcısı sıfırdan
 eklendi, prompt v18→v22 arası dört kez sıkılaştırıldı ve o oturumun tamamı
 (geçici bayraklar dahil) bu dosyaya işlendi — yedeği
-`CLAUDE.md.2026-08-06.bak`. Yine de kod
+`CLAUDE.md.2026-08-06.bak`; 2026-08-10'da (bu dosyaya hiç işlenmeden) deste
+listesi/kart listesi/kart düzenleme modalı "Obsidian Pulse" dashboard
+mockup'larına göre yeniden tasarlandı (commit `f7199d4`) — 2026-08-11'de
+`git log` + commit diff okunarak fark edildi ve bu dosyaya işlendi; aynı
+oturumda iki geçici bayrağın (`kDebugBypassCache`, `activeAiProvider`) yine
+7 Ağustos'tan beri açık unutulmuş olduğu `flutter test` ile bulundu, ikisi
+de kullanıcı onayıyla geri alındı (662→667 test, hepsi yeşil); aynı günün
+devamında sırasıyla Deneme Sınavı kurulum ekranı, kart listesi ekranı,
+Kendini Test Et kurulumu, ortak `AppShell` (sidebar tek yerde), İstatistik
+ekranı ve son olarak Ayarlar ekranı "Obsidian Pulse" dashboard mockup'larına
+göre (amber→mor/pembe) yeniden tasarlandı — ayrıntılar "Devam Eden İş"
+bölümündeki 0.1-0.6 numaralı alt başlıklarda. Yine de kod
 > değiştikçe eskiyebilir — şüphelendiğin bir iddiayı grep ile hızlıca
 > doğrula ve bu dosyayı güncelle.
 
@@ -29,23 +40,407 @@ Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
 spaced-repetition çalışma kartı üretir. Hedef kitle: komite sınavına
 hazırlanan tıp fakültesi öğrencileri.
 
-## Devam Eden İş — KALDIĞIMIZ YER (2026-08-06)
+## Devam Eden İş — KALDIĞIMIZ YER (2026-08-11)
 > Yeni oturumda ÖNCE burayı oku. Bitince bu bölümü güncelle/temizle.
 
-### ✅ GEÇİCİ BAYRAKLAR KAPANDI (2026-08-06 sonu)
-GLM testi için elle açılmış iki sabit test bitince GERİ ALINDI; uygulama
-yeniden production davranışında. Şu anki (doğru) değerler:
+### 0.6. Ayarlar ekranı — "ayarlar ekranı.png" mockup'ına göre kart-ızgara + VERİ DÜZELTMESİ
+`~/Downloads/ayarlar ekranı.png` referans alınarak `SettingsScreen` düz
+`ListView`+`Card`'dan (0.4/0.5'teki `StatsScreen` deseniyle AYNI) kart-ızgara
+düzenine çevrildi: sol sütun Görünüm/Hesap/Yasal, sağ sütun Çalışma/Veri —
+`AppShell`'e ZATEN bağlıydı (bkz. 0.4), sidebar/logo ayrıca dokunulmadı.
+- **BİLİNÇLİ VERİ DÜZELTMESİ (kullanıcının açık talimatı):** referans
+  tasarımdaki profil kartı "Pro Plan'a 3 gün kaldı" yazıyordu — uygulamada
+  gerçek bir abonelik sistemi YOK (bkz. "Bilinmeyen / Henüz
+  Kararlaştırılmamış"), bu metin KOPYALANMADI. Yerine (`_ProfileHeaderRow`)
+  yalnızca GİRİŞ YAPMIŞ kullanıcıda, gerçek `StudyLog.currentStreak`'e
+  dayanan bir durum satırı ("N günlük serin var") gösteriliyor; seri 0 ise
+  satır tamamen atlanıyor (sahte "0 günlük seri" cümlesi kurulmuyor), giriş
+  yapılmamışsa kart TAMAMEN gizleniyor (kimliksiz bir profil kartı yanlış
+  veri olurdu). Ad da uydurulmadı: OTP e-posta akışında ayrı bir "ad" alanı
+  yok (bkz. `AuthService` doc yorumu) — `userMetadata['full_name'/'name']`
+  varsa (Google OAuth) o kullanılıyor, yoksa e-postanın `@` öncesi sadeleştirilip
+  ad gibi gösteriliyor (`_nameFromEmail`). Canlıda bu makinenin hesabında
+  `userMetadata` dolu çıktı ve "Kerem Külhacı" doğru göründü (ekran
+  görüntüsüyle doğrulandı).
+- **Tema seçimi artık toggle buton DEĞİL, iki tıklanabilir önizleme kartı**
+  (`_ThemePreviewCard`, Koyu/Açık) — seçili olan violet kenarlık + gradyan
+  checkmark rozeti alıyor. Her kart KENDİ temsil ettiği modun renklerini
+  gösterir (uygulamanın o anki temasından BAĞIMSIZ — bir önizleme, "Koyu"
+  kartı uygulama açık modda bile koyu görünür); yalnızca SEÇİLİ-DEĞİL
+  çerçevenin rengi uygulamanın mevcut parlaklığına göre ayarlanıyor. Kartlar
+  `ThemeController.setMode` ile DOĞRUDAN moda geçiyor (eski `toggle`
+  metodundaki "mevcut moda göre tersini seç" mantığına ihtiyaç kalmadı —
+  `toggle` metodunun kendisi ve `ThemeController` testleri hâlâ duruyor,
+  yalnızca UI'da kullanılmıyor). **`lib/widgets/theme_toggle_button.dart`
+  SİLİNDİ** — tek kullanan bu ekrandı, yeni tasarımda karşılığı yok; grep ile
+  başka hiçbir yerden çağrılmadığı doğrulandı.
+- **Tüm kartlar border YOK, elevation only** (kullanıcının açık talimatı) —
+  `Card` widget'ı bu uygulamanın global `cardTheme`'i yüzünden HER ZAMAN bir
+  kenarlık çiziyor (bkz. `flashcard_tile.dart`/`exam_sim_screen.dart
+  _DashCard`'daki aynı, önceden bulunmuş bulgu) — o yüzden 5 bölüm de artık
+  `Card` değil düz `Container`+`boxShadow` (`_SettingsCard`).
+- İkon rozetleri artık dolu mor/pembe daire + beyaz ikon (`_IconBadge`,
+  `_Accent.violet/pink/danger`) — nötr `Icon` değil, mockup'taki gibi renkli.
+  "Çalışma" ve "Veri" kartlarındaki satırlar artık ne düz metin trailing ne
+  chevron: değer PİLİ (`_ValuePill`, "20 kart"/"Belirlenmedi") ya da gerçek
+  aksiyon BUTONU (`_GradientPillButton`/`_OutlinedPillButton`, "Dışa aktar"/
+  "İçe aktar"/"Çıkış Yap"/"Giriş yap / Kayıt ol").
+- **Veri kartındaki satırların KENDİSİ artık tıklanamıyor** (`_SettingsRow.
+  onTap: null`) — asıl aksiyon trailing'deki BUTON'da; bu, yıkıcı "İçe aktar"
+  işleminin yanlışlıkla satıra dokunarak tetiklenmesini de zorlaştırıyor
+  (bilinçli, talimatta yoktu ama mockup'taki buton vurgusuyla tutarlı).
+  "İçe aktar" ikon rozeti + buton rengi `colorScheme.error` (mor/pembe
+  paletin dışında, KASITLI — üzerine yazan/yıkıcı bir işlem olduğu için ayrı
+  bir semantik renk; "amber/gold temizliği" kapsamına GİRMİYOR çünkü zaten
+  amber değil, error rengiydi/kaldı).
+- Cloud illüstrasyonu (`_CloudIllustration`) saf dekoratif, hiçbir veriye
+  bağlı değil; Veri kartı gövdesi `LayoutBuilder` ile <420px genişlikte
+  illüstrasyonu satırların ÜSTÜNE alıyor (yan yana taşmasın diye) — sidebar
+  sabit 80px olduğu için dar ekranlarda kart genişliği daralıyor (bkz. 0.4'ün
+  "dar ekranda gerçek bir sınır" notu), bu ayrıca test EDİLMEDİ (bu ekran
+  için ayrı bir `settings_screen_test.dart` yok), yalnızca savunmacı bir
+  önlem.
+- İçerik artık `ContentShell(maxWidth: AppTheme.dashboardMaxWidth)` (1240) —
+  eskisi gibi `contentMaxWidth` (760, okunacak metin sütunu) DEĞİL; iki yan
+  yana kartı sıkıştırırdı, `StatsScreen`'in aynı gerekçesiyle değiştirildi.
+- **Tek sütuna düşünce (mobil/tablet) sıra SATIR SATIR** (Görünüm, Çalışma,
+  Hesap, Veri, Yasal) — "önce tüm sol sütun, sonra sağ" DEĞİL
+  (`_SettingsGrid._rowMajor`). Bunun tek sebebi estetik değildi: ilk yazımda
+  "tüm sol sütun önce" sıralaması Çalışma kartını (limit/hedef düzenleme)
+  800×600 test yüzeyinde EKRAN DIŞINA itti ve `deck_list_screen_test.dart`
+  içindeki 3 test `tune_outlined` ikonuna tıklayamadığı için kırıldı — satır
+  satır sıralama hem bunu ÇÖZDÜ hem ızgaranın masaüstündeki eşleşmesini
+  (satır 1: Görünüm|Çalışma) mobilde de koruyor, iki kuş bir taş.
+- **Test:** `theme_controller_test.dart`'taki tek widget testi ("toggle
+  butonu temayı koyuya çevirir") YENİ etkileşim modeline göre YENİDEN
+  YAZILDI ("tema önizleme kartına dokununca temayı değiştirir" — artık
+  `find.text('Koyu')`/`find.text('Açık')`e tıklıyor, ikon aramıyor). Ayrı bir
+  `settings_screen_test.dart` YOK (önceden de yoktu, bu oturumda da
+  eklenmedi — kapsam dışı bırakıldı). Paket **667/667 yeşil**
+  (`_SettingsGrid` sıralama düzeltmesinden SONRA), `flutter analyze` **0 yeni
+  uyarı** (bir `unused_element_parameter` uyarısı `_IconBadge`'in kullanılmayan
+  `size` parametresi kaldırılarak giderildi).
+- **Tarayıcıda TAM doğrulandı** (2026-08-11): hem koyu hem açık modda
+  ekran görüntüsüyle kontrol edildi — profil kartı gerçek ad+e-posta+"Çıkış
+  Yap" gösterdi (test hesabı zaten girişliydi, "Pro Plan" hiçbir yerde
+  YOK), tema kartları arasında geçiş (Koyu↔Açık, checkmark rozeti doğru
+  kart üzerinde) çalıştı, Veri/Çalışma/Yasal kartları taşmadan render oldu.
+  **Ortam notu:** bu oturumda sidebar'ın EN ALTINDAKİ (gear/Ayarlar) ikonu
+  tıklamak alışılmadık derecede zor oldu — pencere yüksekliği ardışık
+  screenshot çağrıları arasında dalgalanıyordu (734→683 gibi) ve `Spacer`
+  ile en alta sabitlenen ikonun Y koordinatı buna göre kayıyordu; ÜSTTEKİ
+  sabit-Y ikonlar (Ana Sayfa, Kendini Test Et) hep ilk denemede tıklandı.
+  Çözüm: koordinatı EN SON screenshot'tan hesaplayıp araya başka tool call
+  (zoom/navigate) SOKMADAN hemen tıklamak. Kod tarafında bir sorun DEĞİL.
+
+### 0.5. İstatistik ekranı — "istatistik ekranı.png" mockup'ına göre amber/gold temizliği
+`~/Downloads/istatistik ekranı.png` (Aug 11 16:05 — Aug 4'teki "istatistik
+ekranı 2.png"'den AYRI, daha yeni bir mockup, "2" son eki YOK) referans
+alınarak `StatsScreen`'deki amber vurgular mor→pembe dashboard paletine
+çevrildi. Sidebar/logo tutarlılığı zaten 0.4'teki `AppShell` işinden
+otomatik geldi (bu ekranda ayrıca bir logo/sidebar tanımı yoktu, kontrol
+edildi).
+- **`StudyHeatmap` (Çalışma takvimi):** `colorForLevel` artık `(ColorScheme
+  scheme, HeatLevel level)` DEĞİL, `(HeatLevel level, {required bool
+  isDark})` alıyor — imza değişti, bkz. aşağıda test notu. Renk artık tek
+  bir rengin (`scheme.primary`, amber) alfa kademeleri DEĞİL, açık violet'ten
+  (`AppTheme.dashboardViolet`) koyu pembeye (`AppTheme.dashboardPinkHot`)
+  gerçek `Color.lerp` interpolasyonu (low=%33, medium=%66, high=uç). Bugün
+  halkasının kenarlığı da amber'den `AppTheme.dashboardVioletDeep`'e döndü.
+  Açıklama cümlesindeki "amber" kelimesi kaldırıldı ("ne kadar amber, o
+  kadar çok" → "ne kadar koyu, o kadar çok").
+- **`_DeckReadinessBar` (Deste hazırlığı):** kırmızı/tertiary/primary
+  dallanması TAMAMEN kaldırıldı (bkz. yukarıdaki "Deste Hazırlığı"
+  bölümünün düzeltmesi) — artık `LinearProgressIndicator` değil, elle
+  `Stack`+`FractionallySizedBox`+`ClipRRect` ile çizilen, TEK bir mor→pembe
+  gradyanlı (`AppTheme.dashboardProgressGradient` — DİKKAT, `dashboardCtaGradient`
+  DEĞİL: `dashboardProgressGradient` zaten "İlerleme çubukları için" diye
+  belgeli, daha soluk bir token; CTA gradyanı yalnızca BUTONLAR için) çubuk.
+- **"Bugün" kartının amber kenarlığı kaldırıldı** — `_StatCard._emphasisShape`
+  silindi, `emphasized` kart artık diğer üçü gibi border'sız. İkon rengi
+  BİLİNÇLİ olarak dokunulmadı (hâlâ amber) — kullanıcı yalnızca kenarlığı
+  hedef aldı, "iki izin verilen amber yeri" (bu ikon + seri alevi) kuralı
+  kısmen duruyor, tam kaldırma istenmedi.
+- **`ReviewForecastChart` ("Önümüzdeki 7 gün"):** çubuklar artık `scheme.
+  primary` (amber, en yoğun gün tam/diğerleri %55 alfa) değil, hepsi AYNI
+  `AppTheme.dashboardProgressGradient`; "en yoğun gün" ayrımı hâlâ
+  `normalBarAlpha` ile ama artık rengi DEĞİL gradyanı saran bir `Opacity`
+  üzerinden.
+- **KORUNDU (dokunulmadı):** `TopicSuccessBar` (Konu başarısı listesi) —
+  kullanıcı açıkça "semantic/durum renkleri, marka rengi değil" dedi.
+  Genel layout/veri yapısı da değişmedi, yalnızca renkler.
+- **Test:** `study_heatmap_test.dart`'ta imza değişikliği yüzünden 6 test
+  güncellendi (`colorForLevel` çağrıları + iki test adı/beklenen değer,
+  halka rengi testi, açıklama metni testi) — davranışsal kapsam AYNI kaldı,
+  yalnızca hangi renk beklendiği değişti. `deck_readiness_test.dart` ve
+  `review_forecast_test.dart` HİÇ dokunulmadan geçti (renk assertion'ı hiç
+  yoktu). Paket **667/667 yeşil**, `flutter analyze` **0 yeni uyarı**.
+- **Tarayıcıda KISMEN doğrulandı:** heatmap'in violet→pink kademeleri,
+  "Deste hazırlığı" yüzde metninin moru ve "Bugün" kartının border'sız hâli
+  ekran görüntüsüyle DOĞRU görüldü. "Önümüzdeki 7 gün" bölümü sayfanın
+  altında kaldı ve bu oturumda ne fare tekerleği ne sürükleme ne klavye
+  (`End`) ile aşağı kaydırılabildi (CanvasKit'te tekerlek zaten bilinen bir
+  sorun, bkz. "ortam notları" — bu sefer sürükleme de çalışmadı) — kod
+  incelemesiyle ve `ReviewForecastChart`'ın `_DeckReadinessBar` ile AYNI
+  token'ı kullandığının doğrulanmasıyla yetinildi, gözle TEYİT edilemedi.
+
+### 0.4. `AppShell` — sidebar TEK yerde, paylaşılan bir kabuğa çıkarıldı
+Sebep: Deneme Sınavı kurulum ekranının sidebar'ı YOKTU (`ExamSimSetupScreen`
+hâlâ eski `Scaffold(appBar: ...)` kalıbındaydı) — `deck_list_screen.dart` ve
+`mcq_setup_screen.dart` sidebar'ı KENDİ kodlarına ayrı ayrı gömdüğü için bu
+unutulmuştu ve fark edilmesi bir kullanıcı raporu gerektirdi. Kullanıcı
+açıkça "bunu bir daha unutmayalım" dedi — çözüm nokta düzeltme DEĞİL, mimari:
+- **`lib/widgets/app_shell.dart`** (YENİ) — `AppShell` widget'ı: sol
+  `SideNavBar` + opsiyonel `topBar` + `body` slotu, TÜM navigasyon mantığını
+  (hangi ikon nereye gider, "zaten oradaysan no-op", "Ana Sayfa"/"Destelerim"
+  → `Navigator.popUntil((r) => r.isFirst)`) TEK yerde topluyor. Ayrıca
+  `AppShellTopBar` (geri oku + başlık — Mcq/Exam/Stats/Settings ortak).
+- **Beş ana ekranın HEPSİ artık bunu kullanıyor**: `DeckListScreen` (dolu
+  dashboard dalı — boş/karşılama dalı KASITLI olarak DIŞARIDA, o ekranın
+  sidebar'ı hiç olmaması ayrı bir tasarım kararı), `McqSetupScreen`,
+  `ExamSimSetupScreen` (bu oturumda sidebar'a KAVUŞTU), `StatsScreen`,
+  `SettingsScreen` (bu oturumda sidebar'a KAVUŞTU). Yeni bir ana ekran
+  eklerken `AppShell`'i kullanmadan sidebar'ı elle kurma — tam da bunu
+  önlemek için yazıldı.
+- **Döngüsel import BİLİNÇLİ**: `app_shell.dart` dört hedef ekranı
+  (Mcq/Exam/Stats/Settings) `push` edebilmek için import ediyor, o dört ekran
+  da `AppShell`/`AppShellTopBar` için `app_shell.dart`'ı import ediyor —
+  Dart bunu sorunsuz derliyor (iki dosya arası döngüsel `import` desteklenir,
+  `part`/`part of` değil). `SideNavItem` enum'u `side_nav_bar.dart`'ta
+  tanımlı ama `app_shell.dart` `export` ediyor — ekranlar tek import'la
+  ikisine de erişiyor.
+- **`WidgetTester.pageBack()` tuzağı:** `AppShellTopBar`'ın geri oku
+  `Scaffold.appBar` DEĞİL (bilinçli — `AppBar` tüm genişliği kaplar,
+  sidebar'ın ÜSTÜNE biner), bu yüzden Flutter'ın kendi `BackButton`
+  widget'ını KULLANMIYOR. `WidgetTester.pageBack()` tam olarak
+  `Tooltip(message: 'Back')` arıyor — bu eklenmezse "One back button
+  expected on screen" ile testler patlıyor (`deck_list_screen_test.dart`'ta
+  iki kez oldu). Yeni bir geri oku/ghost buton yazarsan ve testten
+  `pageBack()` ile tetiklenmesi gerekiyorsa bu tooltip'i unutma.
+- **Dar ekranda gerçek bir sınır ortaya çıktı:** `SideNavBar` genişliği
+  (80px) HİÇBİR ekranda responsive olarak gizlenmiyor — bu deck_list_screen'de
+  zaten 10 Ağustos'tan beri böyleydi (dokunulmadı), ama StatsScreen'e sidebar
+  eklenince `daily_goal_test.dart`'ın "mobil genişlik" testi (380px viewport)
+  gerçek TAŞMA (RenderFlex overflow) yakaladı — 380-80=300px içerik genişliği
+  4 metrik kartı için gerçekten dar. Test genişliği 460'a çıkarıldı (380
+  "gerçek mobil içerik" + 80 sidebar telafisi) — bu bir test ayarı düzeltmesi,
+  UI kodunda bir şey DEĞİŞMEDİ. Eğer ileride app GERÇEKTEN dar (< ~400px)
+  ekranlarda kullanılacaksa `SideNavBar`'ın kendisinin responsive
+  gizlenmesi/daralması ayrı bir iş — bu oturumda kapsam dışı tutuldu, kimse
+  istemedi.
+- Test: paket **667/667 yeşil** (3 test bu refactor yüzünden güncellendi:
+  `daily_goal_test.dart`'ın mobil genişlik sabiti + `deck_list_screen_test.
+  dart`'taki iki `pageBack()` testi tooltip eklenince kendiliğinden düzeldi).
+  `flutter analyze` **0 yeni uyarı** (90 baseline aynı kaldı).
+- **Tarayıcıda KISMEN doğrulandı:** `McqSetupScreen`'de sidebar+topBar+
+  branding paneli ekran görüntüsüyle DOĞRU çalıştığı görüldü (aynı `AppShell`
+  bileşenini `ExamSimSetupScreen`/`StatsScreen`/`SettingsScreen` de birebir
+  kullanıyor, kod düzeyinde farklı bir dal yok). Ama bu üçünü ayrı ayrı
+  gerçek tarayıcıda gezip GÖRMEK bu oturumdaki tanıdık dwds/CanvasKit
+  tıklama bozulması yüzünden tamamlanamadı (bkz. "ortam notları" — aynı tab'da
+  arka arkaya birden fazla `Starting application` boot'u loglandı, bu her
+  seferinde tıklamaların sessizce yutulmasıyla eşleşiyor). Sonraki oturumda
+  önce bunu bitir.
+
+### 0.3. Kendini Test Et kurulum ekranı — "kendini test et ekranı.png" mockup'ına göre yeniden çizildi
+`mcq_setup_screen.dart` artık AppBar'lı tek sütun DEĞİL — deste listesindeki
+AYNI sol `SideNavBar`'ı gösteriyor (bkz. hemen aşağıdaki paylaşılan widget
+notu) ve içerik `[Sidebar] [Branding paneli] [Form]` üç kolon (masaüstü) /
+`[Sidebar] + altta branding→form` (dar ekran) düzeninde. Renkler amber'dan
+mor→pembe dashboard paletine döndü. İş mantığı hiç değişmedi.
+- **`SideNavBar` artık PAYLAŞILAN bir widget** (`lib/widgets/side_nav_bar.
+  dart`) — eskiden `deck_list_screen.dart`'a private (`_SideNavBar`) idi,
+  bu ekran da göstermeye başladığı için ÇIKARILDI. Görsel olarak hiçbir şey
+  değişmedi, yalnızca `active: bool` yerine `SideNavItem` enum'u (`home/
+  library/quiz/exam/stats/settings`) ve `onOpenHome`/`onOpenLibrary`
+  callback'leri eklendi. `DeckListScreen` ikisine de `() {}` verir (eskisi
+  gibi no-op); `McqSetupScreen` ikisine de `Navigator.popUntil((r) =>
+  r.isFirst)` verir ("Ana Sayfa" DeckListScreen'in KENDİSİ, `main.dart`'ın
+  `home:` route'u — bkz. "Stack"). Yeni bir ekran sidebar göstermek isterse
+  bu widget'ı import et, yeniden yazma.
+- **Soru sayısı artık `SegmentedButton` DEĞİL, ayrık `ChoiceChip` pilleri**
+  (`_QuestionCountPicker`) — sebep: görev tanımı seçili pilin GERÇEK
+  mor→pembe gradyan olmasını istiyordu, `SegmentedButton`'ın `ButtonStyle`'ı
+  gradyan zemin desteklemiyor (`backgroundColor` yalnızca düz `Color`).
+  Aynı "gerçek widget'ı gradyan `Container`'a sar" deseni (`exam_sim_screen.
+  dart`/`card_list_screen.dart` ile AYNI) — testler hâlâ `.selected`
+  okuyabiliyor. `test/mcq_setup_screen_test.dart`'taki ilgili test
+  `SegmentedButton` yerine `ChoiceChip` finder'ına güncellendi.
+- **"Deste" alanı hâlâ gerçek `DropdownButtonFormField<String>`** (testler
+  bunu açıp öğe seçiyor) — yalnızca `InputDecoration` zenginleştirildi
+  (ikon, "Seçili deste" etiketi, odaklanınca mor kenarlık = "focus ring").
+  **"Kapsam" hâlâ gerçek `RadioListTile<String?>`** — eskiden tek sütun +
+  sabit yükseklikte kaydırılan bir kutuydu (`_scopeListMaxHeight`), o kutu
+  KALDIRILDI: artık 2 sütunlu, her seçenek kendi kenarlıklı kutusunda (seçili
+  = mor kenarlık), sayfa zaten `SingleChildScrollView` içinde olduğu için
+  uzun konu listesi ekranı uzatıyor, kabul edilebilir bir davranış değişimi.
+- Başlık artık iki renkli `Text.rich` ("Çoktan seçmeli" beyaz / "pratik" mor,
+  ayrı satırlarda) — `find.text('Çoktan seçmeli pratik')` testi
+  `'Çoktan seçmeli\npratik'`e güncellendi.
+- 3 özellik satırı (Odaklanmış çalışma/Anında geri bildirim/Gelişimini takip
+  et) ilk kez eklendi — eskiden hiç yoktu, mockup'ın bir parçası.
+- Test: `mcq_setup_screen_test.dart` **10/10 yeşil** (2 test güncellendi,
+  8'i hiç dokunulmadan geçti — dropdown/radio davranışı aynı widget
+  tipleriyle korunduğu için). Paket **667/667**, `flutter analyze` bu
+  dosyalarda **0 uyarı**.
+- **Tarayıcıda doğrulama YAPILAMADI** — bu oturumdaki dwds/CanvasKit
+  bozulması (bkz. "ortam notları") bu son adımda ısrarcıydı: birden fazla
+  temiz sekme/sunucu yeniden başlatma denemesinde bile sidebar tıklamaları
+  ya hiç kayda değmedi ya da screenshot CDP timeout'una düştü. Kod hatası
+  olduğuna dair HİÇBİR belirti yok (statik analiz temiz, 10 dedike test
+  yeşil) ama bu ekranın gerçek tarayıcıda göründüğü gibi çalıştığı CANLI
+  doğrulanamadı — sonraki oturumda önce bunu dene.
+
+### 0.2. Kart listesi ekranı — "kart liste ekranı.png" mockup'ına göre ince ayar (2026-08-11)
+`~/Downloads/kart liste ekranı.png` (Obsidian Pulse ailesinden, PDF'ten
+üretilen kart listesi/deste detay ekranının mockup'ı) referans alınarak
+`card_list_screen.dart` + `flashcard_tile.dart` üzerinde hedefli değişiklikler
+yapıldı — ekranın ÇOĞU (banner gradyanı, "Kartların hazır" kartı, sabit alt
+çubuk konumu) zaten 10 Ağustos'taki dashboard işinden doğru geliyordu, bu
+oturum yalnızca EKSİK kalan üç şeyi tamamladı:
+- **`_FilterBar` zorluk/konu renk ayrımı:** Kolay/Orta/Zor çipleri seçiliyken
+  artık konu çipleriyle AYNI mor DEĞİL, kendi semantik rengini taşıyor (yeşil/
+  amber/kırmızı — `AppTheme.accentGreen(OnLight)`/`accentAmber(OnLight)`/
+  `colorScheme.error`, yeni token YOK). `_chip()`'e opsiyonel `accent` parametresi
+  eklendi; `accent: null` (konu çipleri) eski mor davranışı aynen korur.
+  Ayrıca çubuğa inline "Zorluk"/"Konular" grup etiketleri + aralarında ince
+  bir ayraç eklendi (mockup'ta ayrı bir başlık satırındaydı; burada AYNI
+  kaydırılabilir satırın içine, grubun hemen başına gömülü — ayrı bir satırın
+  çip grubu genişliğini tahmin etmesi gerekirdi, bu her zaman doğru hizalanır).
+- **DÜZELTME — "Çalışmaya Başla" artık mor→pembe gradyan:** `_StudyBar`'ın
+  butonu eskiden tema varsayılanı (amber) renkteydi, sistemdeki TEK
+  tutarsızlıktı. `_GradientCtaButton` eklendi — `exam_sim_screen.dart`'taki
+  `_GradientStartButton` ile AYNI desen (gerçek `FilledButton` saydam zeminle
+  gradyan `Container`'a sarılı, testler `.onPressed`'i hâlâ okuyabiliyor).
+  Bilinçli olarak PAYLAŞILAN bir widget'a çıkarılmadı (iki dosyada da private
+  kaldı) — bu oturumda yalnızca `card_list_screen.dart` isteniyordu, zaten
+  667/667 yeşil olan `exam_sim_screen.dart`'ı gereksiz yere değiştirmemek için.
+- **`FlashcardTile` sıra numarası artık kenarlıklı daire** (`_NumberBadge`,
+  düz metin DEĞİL) — nötr dashboard token'ları (`heroNeutralFill`/
+  `dashboardSurfaceElevated` + kenarlık), mor DEĞİL (numara bir seçim durumu
+  değil). Bu genişlik değişikliği yüzünden açıklama sütununun sol boşluğu da
+  22→36'ya güncellendi (başlığın altına hizalı kalsın diye).
+- Edit/sil ikonları ve "Hocanın Favorisi" rozeti zaten mockup'la uyumluydu,
+  DOKUNULMADI.
+- Test: `card_filter_test.dart`'taki "Temizle" tıklaması artık önce
+  `tester.ensureVisible` çağırıyor — yeni grup etiketleri çubuğu genişletip
+  sabit 800px test yüzeyinde "Temizle"yi hit-test alanının dışına itti.
+  Paket **667/667 yeşil**, `flutter analyze` bu üç dosyada **0 uyarı**.
+- **Tarayıcıda doğrulama KISMEN yapıldı:** temiz bir tek-boot oturumunda tüm
+  değişiklikler (grup etiketleri, semantik zorluk renkleri, numaralı rozet,
+  gradyan buton, gradyan banner) ekran görüntüsüyle doğrulandı. Ardından aynı
+  tanıdık dwds/CanvasKit bozulması (tekrarlanan tıklama/screenshot sonrası
+  filtre çubuğunun ekranı yatay+dikey döşeyerek tekrarladığı bir render
+  bozulması) tekrar çıktı — kod hatası değil, bu oturumda defalarca görülen
+  ortam kırılganlığı (bkz. "Tarayıcıda elle doğrulama — ortam notları").
+
+### ✅ GEÇİCİ BAYRAKLAR ÜÇÜNCÜ KEZ AÇIK BULUNDU VE KAPATILDI (2026-08-11)
+5-6 Ağustos'ta iki kez, sonra 7 Ağustos'ta TEKRAR (GLM v23 ölçümü + flash-lite
+testi için) açılmış, bir dahaki oturuma (10 Ağustos'taki koca bir tasarım
+işine) kadar geri alınmamıştı. 2026-08-11'de `flutter test` çalıştırılınca
+`pdf_cache_service_test.dart`'ın 5 testi kırmızı çıktı, sebep tam da bu
+tekrarlayan hata kalıbıydı. Kullanıcı onayıyla ikisi de geri alındı. Şu anki
+(doğru) değerler:
 
 | Dosya | Sabit | Değer |
 |---|---|---|
 | `lib/services/ai_provider_config.dart` | `activeAiProvider` | `AiProvider.gemini` |
 | `lib/services/pdf_cache_service.dart` | `kDebugBypassCache` | `false` |
 
-- `kDebugBypassCache` 5 VE 6 Ağustos'ta iki kez açık unutuldu (paylaşılan PDF
-  önbelleğini sessizce devre dışı bırakıyor, `pdf_cache_service_test`'in 5
-  testini kırmızıya çeviriyor). Sabitin üstünde bunu hatırlatan yorum var.
-  Bir daha test için açarsan bu bölümü de güncelle.
-- Test paketi bu iki değerle **662/662 yeşil** (2026-08-06'da doğrulandı).
+- `kDebugBypassCache` artık DÖRT kez (5, 6, 7 Ağustos, fark edilmesi
+  11 Ağustos) açık unutuldu — sabitin üstündeki uyarı yorumu bunu önlemeye
+  yetmiyor, yeni bir oturuma başlarken bu iki sabiti `grep` ile kontrol etmek
+  otomatik hafızadan daha güvenilir.
+- Test paketi bu iki değerle **667/667 yeşil** (2026-08-11'de doğrulandı;
+  sayı 662'den 667'ye çıktı — aradaki commit'lerde yeni testler eklenmiş).
+
+### 0. 2026-08-10 dashboard tasarım işi — bu dosyaya İLK KEZ 11 Ağustos'ta işlendi
+Commit `f7199d4` (10 Ağustos 17:41), önceki oturumda hiç `CLAUDE.md`'ye
+yazılmadan yapılmıştı. `~/Downloads` altındaki "Obsidian Pulse" mockup'ları
+(`medkart koyu mod dashboard/`, `medcard light mode dashboard/`, `medcard
+açık mod dashboard.zip`, `soruların gelme ekranı/` — her biri `DESIGN.md` +
+`code.html` + `screen.png` üçlüsü) referans alınarak:
+- **Deste listesi** (`deck_list_screen.dart`, 3292 satır fark): koyu+açık
+  dashboard, sol sidebar navigasyon (stilize tooltip'li ikonlar).
+- **Kart listesi / deste detay** (`card_list_screen.dart`): `_SummaryCard`,
+  `_ReadyBadge`, filtre pilleri (`_FilterBar._chip`), "Hocanın Favorilerini
+  Çalış" banner'ı artık mor→pembe `AppTheme.dashboardCtaGradient` kullanıyor
+  (eskiden amber `primaryContainer`'dı). `_StudyBar` `bottomNavigationBar`
+  slotuna taşındı (eskiden `Column`'un son çocuğuyduydu — uzun içerikte
+  gizlenme riski vardı).
+- **Kart düzenleme modalı** (`edit_card_dialog.dart`, 189 satır fark).
+- Tüm bu değişiklikler `app_theme.dart`'a eklenen 52 satırlık YENİ
+  "dashboard" token ailesini (`AppTheme.dashboardViolet*`,
+  `AppTheme.dashboardCtaGradient`, `AppTheme.heroSurface`,
+  `AppTheme.dashboardSurface*` vb.) kullanıyor — bu, "Tasarım Sistemi"
+  bölümünde anlatılan ESKİ amber/lacivert token setinden AYRI, ikinci bir
+  palet. İki palet birlikte yaşıyor; hangi ekranın hangisini kullandığı
+  netleştirilmedi/belgelenmedi, sonraki oturumda karışıklık olursa önce
+  `app_theme.dart`'ı oku.
+- **HENÜZ dokunulmamış ekranlar** (mockup klasörlerinde bunlara ait bir
+  tasarım YOK, yani bu bir sonraki faz değil — sadece not): çalışma ekranı,
+  istatistik, ayarlar hâlâ eski (7/20 tarihli) amber/lacivert temada.
+  **Deneme Sınavı kurulum ekranı 11 Ağustos'ta, Kendini Test Et (MCQ) kurulum
+  ekranı da aynı gün DAHA SONRA bu listeden ÇIKTI** — bkz. aşağıdaki "Deneme
+  Sınavı kurulum ekranı — dashboard yeniden tasarımı" ve "Kendini Test Et
+  kurulum ekranı" bölümleri. Kullanıcı yeni bir mockup indirmedikçe kalan
+  ekranlara "dashboard" paletini yaymaya kalkma — sor.
+
+### 0.1. Deneme Sınavı kurulum ekranı — dashboard yeniden tasarımı + sidebar item (2026-08-11)
+Sol sidebar'da "Deneme Sınavı" artık "Kendini Test Et"ten AYRI bir ikonla
+duruyor (`Icons.timer_outlined`, `_SideNavBar` içinde quiz ile istatistik
+arasında) — eskiden yalnızca dashboard gövdesindeki kısayol kartından ve
+AppBar'dan erişilebiliyordu, sidebar'da hiç yoktu, "Kendini Test Et" ile
+karışıyordu. `deck_list_screen.dart`'a `onOpenExam` callback'i eklendi.
+- `exam_sim_screen.dart` (`ExamSimSetupScreen`) TAMAMEN yeniden çizildi —
+  kullanıcının verdiği ayrıntılı görsel şartnameye göre (mockup dosyası
+  YOK, şartname metin olarak verildi): "Soru Sayısı ve Süre" kartı
+  (`SegmentedButton<int>` 10/20/40 + `-`/`+` stepper, adım 5, alt sınır 5,
+  üst sınır 180 dk — eski serbest metin `TextField` KALDIRILDI), "Hangi
+  destelerden sınav olmak istersin?" kartı ("Tüm desteler" gradyan pil +
+  diğer destelerin kart-sayısı rozetli ghost pilleri), "Sınav Kapsamını
+  Özelleştir" kartı (arama kutusu + seçili konular üstte kaldırılabilir
+  gradyan pil + altta ghost etiket bulutu + sayfa aralığı çipi), sağda sabit
+  "Sınav Özeti" paneli (soru sayısı/süre/seçili konu + zorluk dağılım barı +
+  gradyan "Sınavı Başlat" butonu). Masaüstünde (`ScreenSize.desktop`, ≥900px)
+  iki sütun, dar ekranda tek sütun (özet panel en altta) — `ResponsiveBuilder`.
+- **İş mantığı HİÇ değişmedi**: `_pool`, `_onDeckChanged`, `_pageBounds`,
+  `_start` (→ `McqGenerator.generate` + `requireAuth`) birebir aynı; yalnızca
+  süre artık `TextEditingController` yerine `int _minutes` + stepper.
+- **Gradyan chip'ler gerçek `ChoiceChip`/`FilterChip` SARILARAK yapıldı**
+  (`_deckGradientChip`, `_topicChip`): iç chip'in `backgroundColor`/
+  `selectedColor`'ı saydam, asıl mor→pembe rengi dıştaki `Container`'ın
+  `AppTheme.dashboardCtaGradient`'ı veriyor. Bilinçli seçim — Flutter'da
+  `ChoiceChip`/`FilterChip` gradyan zemin desteklemiyor, ama widget TİPİNİ
+  değiştirmeden (testler `.selected` property'sini hâlâ okuyabiliyor)
+  gradyan istenen görünümü vermenin tek yolu buydu. Aynı desen "Sınavı
+  Başlat" butonunda da (`_GradientStartButton`, gerçek bir `FilledButton`).
+  Yeni bir gradyan chip/buton gerekirse bu deseni tekrarla, widget tipini
+  değiştirme.
+- Testler yeniden yazıldı: `test/exam_sim_screen_test.dart` (soru sayısı/süre
+  artık `SegmentedButton`/stepper key'leriyle okunuyor —
+  `ExamSimSetupScreen.minutesValueKey`/`minutesDecrementKey`/
+  `minutesIncrementKey`, TextField YOK artık), `test/exam_sim_deck_filter_
+  test.dart` (yalnızca son test güncellendi, deste/konu chip testlerinin
+  TAMAMI değişmeden geçti — gradyan-sarma deseni sayesinde). Paket
+  **667/667 yeşil**, `flutter analyze` bu iki dosyada ve `deck_list_screen.
+  dart`'ta **0 uyarı**.
+- **DÜZELTME — `flutter analyze` bu makinede ÇALIŞIYOR** (2026-08-11'de
+  doğrulandı, hem dosya bazlı hem tüm proje). Bu dosyanın "Türkçe karakter
+  yüzünden çalışmıyor" notu ESKİMİŞ — ne zaman eskidiği bilinmiyor, bir daha
+  güvenip atlamadan önce dene.
+- **Tarayıcıda elle doğrulama YARIM KALDI:** ekran görüntüleriyle düzen/
+  gradyan/gerçek veri (zorluk dağılımı, deste rozetleri) doğrulandı, ama
+  chip/stepper/buton TIKLAMALARI bu oturumda hiç kayda değer şekilde
+  çalışmadı — `flutter run` sekmesi tekrar tekrar (3-4 kez, sunucu yeniden
+  başlatılsa bile) `Starting application from main method` satırını İKİ+ KEZ
+  logladı ve bir noktada tamamen BEYAZ EKRAN verdi (bkz. "Tarayıcıda elle
+  doğrulama — ortam notları"). Bilinen dwds çoklu-istemci sorununun bu
+  oturumdaki en ısrarlı hâliydi — "tüm sekmeleri kapat + sunucuyu yeniden
+  başlat" bile tek seferde çözmedi. **Bu bir kod hatası DEĞİL** (667/667 test
+  aynı etkileşimleri ayrıntılı kapsıyor ve yeşil) — ama tıklamaların gerçek
+  tarayıcıda çalıştığı canlı doğrulanamadı. Sonraki oturumda önce bunu
+  doğrula, güvenip atlama.
 
 ### 1. GLM sağlayıcısı — DEĞERLENDİRİLDİ, PRODUCTION'A ALINMADI
 Altyapı uçtan uca çalışıyor ve canlı doğrulandı (bkz. "GLM sağlayıcısı").
@@ -114,8 +509,11 @@ numaralı dosya gelebilir — `~\Downloads\istatistik ekranı *.png`).
 32 GLM testi), **662/662 yeşil** — geçici bayraklar kapatıldıktan sonra
 2026-08-06'da doğrulandı. GLM testleri sağlayıcı `gemini` iken de çalışır
 (hepsi `MockClient`, `activeAiProvider`'a bakmaz).
-`flutter analyze` bu makinede çalışmıyor (proje yolundaki Türkçe karakter) —
-doğrulama için `flutter test` kullan.
+(DÜZELTME 2026-08-11: "`flutter analyze` bu makinede çalışmıyor" iddiası
+ARTIK YANLIŞ — hem tek dosya hem tüm proje taraması sorunsuz çalıştığı
+doğrulandı, bkz. "Deneme Sınavı kurulum ekranı — dashboard yeniden tasarımı".
+Ne zaman düzeldiği/doğru olmadığı bilinmiyor; yine de `flutter test` asıl
+davranış doğrulaması için birincil araç olmaya devam ediyor.)
 
 ## Stack
 - Dart / Flutter, tek hedef **web** (`flutter run -d web-server --web-port 8080`).
@@ -808,9 +1206,13 @@ bir "en zayıf konu" üretiyordu).
   <75 tertiary / üstü primary` idi. **Bu değişiklik Deneme Sınavı sonuç
   ekranını da etkiliyor** (widget ortak) — bilinçli: tek widget'ta iki ayrı
   renk dili taşımamak için.
-- `_DeckReadinessBar` (Deste hazırlığı) KIRMIZIYI KORUYOR — bu iş yalnızca
-  Konu başarısı bölümünü kapsıyordu. Yani iki çubuğun renk eşikleri artık
-  aynı DEĞİL; birleştirmek ayrı bir karar (koddaki yorumda da yazılı).
+- (DÜZELTME 2026-08-11) `_DeckReadinessBar` (Deste hazırlığı) ARTIK
+  KIRMIZIYI KORUMUYOR — bu satır önceden öyle diyordu, o tarihte doğruydu.
+  Amber/gold temizliği kapsamında kırmızı/tertiary/primary dallanması TAMAMEN
+  kaldırıldı, artık TEK bir mor→pembe gradyan (`AppTheme.
+  dashboardProgressGradient`) — bkz. aşağıdaki "Deste Hazırlığı" bölümünün
+  güncellenmiş notu. `TopicSuccessBar`'ın kendi semantik (durum) renklerine
+  DOKUNULMADI, hâlâ ayrı.
 - Test: `test/topic_data_state_test.dart` (13 test — eşik sınırı, "Zor" tuzağı,
   gruplu sıralama, etiketler, bayrak kapalı davranışı, renkler).
 
@@ -829,9 +1231,15 @@ bir "en zayıf konu" üretiyordu).
 - UI: `stats_screen.dart` içindeki özel `_DeckReadinessBar`. `TopicSuccessBar`
   ile aynı görsel dil (aynı çubuk yüksekliği/yarıçapı) ama ayrı bir widget — alt metni
   "3/10 kart" biçiminde İKİ sayı taşıyor, `TopicSuccessBar` tek sayı
-  gösteriyor. Renk eşikleri (<50 error, <75 tertiary, üstü primary) BURADA
-  AYNEN DURUYOR — `TopicSuccessBar` 2026-08-05'te kırmızıyı bıraktı, bkz.
-  "Konu başarısı — veri yeterliliği durumları".
+  gösteriyor. (DÜZELTME 2026-08-11) Renk eşikleri (<50 error, <75 tertiary,
+  üstü primary) ARTIK YOK — amber/gold temizliği kapsamında TEK bir
+  mor→pembe gradyana (`AppTheme.dashboardProgressGradient`, `LinearProgressIndicator`
+  yerine elle çizilmiş `Stack`+`FractionallySizedBox`) çevrildi; yüzde
+  metninin rengi de tek bir mor tona sabitlendi (`dashboardVioletDeep`/
+  `dashboardViolet`). `TopicSuccessBar` HÂLÂ kendi semantik renklerini
+  koruyor (2026-08-05'te kırmızıyı bırakmıştı, amber/yeşil kaldı) — bu
+  ikisi birbirinden BAĞIMSIZ, karıştırma. Bkz. "Konu başarısı — veri
+  yeterliliği durumları".
 - Test: `deck_readiness_test.dart` (10 test — tanım tutarlılığı, sıralama,
   boş deste, ekran).
 

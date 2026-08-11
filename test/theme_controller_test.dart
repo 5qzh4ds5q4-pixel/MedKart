@@ -83,22 +83,30 @@ void main() {
     });
   });
 
-  testWidgets('toggle butonu temayı koyuya çevirir', (tester) async {
+  testWidgets('tema önizleme kartına dokununca temayı değiştirir', (
+    tester,
+  ) async {
+    // 2026-08-11: eski tek toggle butonu (ay/güneş ikonu) "ayarlar
+    // ekranı.png" tasarımıyla iki tıklanabilir önizleme kartına
+    // (Koyu/Açık) çevrildi — bkz. `SettingsScreen._ThemePreviewCard`.
     final controller = ThemeController(initialMode: ThemeMode.light);
     await tester.pumpWidget(_app(controller));
 
-    // Tema butonu artık Ayarlar ekranında.
+    // Tema seçimi artık Ayarlar ekranında.
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    // Açık modda ay ikonu (karanlığa geç daveti) görünür.
-    expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+    expect(find.text('Koyu'), findsOneWidget);
+    expect(find.text('Açık'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+    await tester.tap(find.text('Koyu'));
     await tester.pumpAndSettle();
 
     expect(controller.mode, ThemeMode.dark);
-    // Koyu moda geçince ikon güneşe döner.
-    expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
+
+    await tester.tap(find.text('Açık'));
+    await tester.pumpAndSettle();
+
+    expect(controller.mode, ThemeMode.light);
   });
 }

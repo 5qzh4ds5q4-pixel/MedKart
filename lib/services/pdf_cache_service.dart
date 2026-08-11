@@ -32,12 +32,7 @@ class PdfCacheHit {
 /// önbelleği sessizce devre dışı bıraktı. `true` bırakırsan
 /// `test/pdf_cache_service_test.dart` 5 test KIRMIZI verir — paket yeşile
 /// dönmüyorsa ilk bakılacak yer burasıdır.
-/// ┌────────────────────────────────────────────────────────────────────┐
-/// │ GEÇİCİ — 2026-08-07: kullanıcının isteğiyle true yapıldı (flash-lite │
-/// │ testi önbellekten değil gerçek çağrıdan geçsin diye). TEST BİTİNCE   │
-/// │ false'A GERİ AL — yoksa yukarıdaki 5 test kırmızı kalır.             │
-/// └────────────────────────────────────────────────────────────────────┘
-const bool kDebugBypassCache = true;
+const bool kDebugBypassCache = false;
 
 /// Paylaşılan PDF→kart önbelleği (`pdf-cache` Edge Function, `pdf_cache`
 /// tablosu — TÜM kullanıcılar için ortak, kullanıcıya özel DEĞİL).

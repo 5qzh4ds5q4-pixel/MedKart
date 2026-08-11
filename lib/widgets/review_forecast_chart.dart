@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../srs/srs_engine.dart';
+import '../theme/app_theme.dart';
 
 /// Önümüzdeki 7 günün tekrar yükü — 7 çubuklu basit bar chart.
 ///
@@ -141,18 +142,31 @@ class _Bar extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    // En yoğun gün tam amber, diğerleri aynı rengin daha soluk tonu — alt
-    // nottaki "en yoğun gün" cümlesi grafikte de karşılık bulsun.
-    final barColor = isBusiest
-        ? scheme.primary
-        : scheme.primary.withValues(alpha: ReviewForecastChart.normalBarAlpha);
-
     final height = count == 0
         ? ReviewForecastChart.emptyBarHeight
         : (heightFraction * ReviewForecastChart.maxBarHeight).clamp(
             ReviewForecastChart.emptyBarHeight,
             ReviewForecastChart.maxBarHeight,
           );
+
+    // 2026-08-11 amber/gold temizliği: eskiden en yoğun gün tam
+    // `scheme.primary` (amber), diğerleri aynı rengin soluk tonuydu. Artık
+    // hepsi AYNI mor→pembe gradyan (`AppTheme.dashboardProgressGradient` —
+    // "Deste hazırlığı" çubuklarıyla AYNI token); "en yoğun gün" ayrımı
+    // rengin KENDİSİYLE değil, eskisi gibi `normalBarAlpha` ile (bu sefer
+    // gradyanı saran bir `Opacity`) korunuyor — grafikteki cümle ("en yoğun
+    // gün: ...") hâlâ görsel bir karşılığa sahip.
+    Widget bar = Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: count == 0 ? scheme.outlineVariant : null,
+        gradient: count == 0 ? null : AppTheme.dashboardProgressGradient,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+      ),
+    );
+    if (count != 0 && !isBusiest) {
+      bar = Opacity(opacity: ReviewForecastChart.normalBarAlpha, child: bar);
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -167,15 +181,7 @@ class _Bar extends StatelessWidget {
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            height: height,
-            decoration: BoxDecoration(
-              color: count == 0 ? scheme.outlineVariant : barColor,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(4),
-              ),
-            ),
-          ),
+          child: bar,
         ),
         const SizedBox(height: 6),
         Text(

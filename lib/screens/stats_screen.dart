@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../srs/srs_engine.dart';
@@ -6,6 +6,7 @@ import '../state/flashcard_store.dart';
 import '../state/study_settings.dart';
 import '../theme/app_theme.dart';
 import '../utils/breakpoints.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/content_shell.dart';
 import '../widgets/daily_goal_ring.dart';
 import '../widgets/exam_trend_chart.dart';
@@ -48,119 +49,118 @@ class StatsScreen extends StatelessWidget {
         ? null
         : SrsEngine.reviewForecast(store.cards, today);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('İstatistik')),
-      body: SafeArea(
-        child: ContentShell(
-          maxWidth: AppTheme.dashboardMaxWidth,
-          child: ResponsiveBuilder(
-            builder: (context, size) {
-              final horizontal = responsiveHorizontalPadding(size);
+    return AppShell(
+      active: SideNavItem.stats,
+      topBar: const AppShellTopBar(title: 'İstatistik'),
+      body: ContentShell(
+        maxWidth: AppTheme.dashboardMaxWidth,
+        child: ResponsiveBuilder(
+          builder: (context, size) {
+            final horizontal = responsiveHorizontalPadding(size);
 
-              // Sol sütun: takvim + hazırlık + trend. Sağ sütun: konu başarısı.
-              // Tek sütuna düşen ekranlarda ikisi alt alta gelir.
-              final leftSections = <Widget>[
-                // subtitle YOK: StudyHeatmap kendi açıklama cümlesini zaten
-                // içeride yazıyor ("Her kare bir gün..."), burada bir tane
-                // daha eklemek metni ikizliyordu.
+            // Sol sütun: takvim + hazırlık + trend. Sağ sütun: konu başarısı.
+            // Tek sütuna düşen ekranlarda ikisi alt alta gelir.
+            final leftSections = <Widget>[
+              // subtitle YOK: StudyHeatmap kendi açıklama cümlesini zaten
+              // içeride yazıyor ("Her kare bir gün..."), burada bir tane
+              // daha eklemek metni ikizliyordu.
+              _SectionCard(
+                icon: Icons.calendar_month_outlined,
+                title: 'Çalışma takvimi',
+                child: StudyHeatmap(log: log, now: today),
+              ),
+              // Kartı olmayan desteler listeye hiç girmiyor; hepsi boşsa
+              // (ya da hiç deste yoksa) bölüm başlığıyla birlikte gizlenir.
+              if (deckReadiness.isNotEmpty)
                 _SectionCard(
-                  icon: Icons.calendar_month_outlined,
-                  title: 'Çalışma takvimi',
-                  child: StudyHeatmap(log: log, now: today),
-                ),
-                // Kartı olmayan desteler listeye hiç girmiyor; hepsi boşsa
-                // (ya da hiç deste yoksa) bölüm başlığıyla birlikte gizlenir.
-                if (deckReadiness.isNotEmpty)
-                  _SectionCard(
-                    icon: Icons.layers_outlined,
-                    title: 'Deste hazırlığı',
-                    subtitle:
-                        'Hazır = üst üste en az '
-                        '${SrsEngine.difficultyKolayRepetitions} kez doğru '
-                        'bildiğin kartlar. En az hazır deste üstte.',
-                    child: Column(
-                      children: [
-                        for (final readiness in deckReadiness)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppTheme.space16,
-                            ),
-                            child: _DeckReadinessBar(readiness: readiness),
-                          ),
-                      ],
-                    ),
-                  ),
-                // Tek deneme trend değil: 2'den az sonuçta başlığıyla
-                // birlikte tüm bölüm gizlenir (bkz. ExamTrendChart.shouldShow).
-                if (ExamTrendChart.shouldShow(examResults))
-                  _SectionCard(
-                    icon: Icons.show_chart,
-                    title: 'Deneme sınavı trendi',
-                    child: ExamTrendChart(results: examResults),
-                  ),
-              ];
-
-              final rightSections = <Widget>[
-                _SectionCard(
-                  icon: Icons.my_location_outlined,
-                  title: 'Konu başarısı',
+                  icon: Icons.layers_outlined,
+                  title: 'Deste hazırlığı',
                   subtitle:
-                      'Başarı = doğru cevap oranı. En zayıf konular üstte.',
-                  child: topicStats.isEmpty
-                      ? _EmptyTopics()
-                      : Column(
-                          children: [
-                            for (final stat in topicStats)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppTheme.space16,
-                                ),
-                                child: TopicSuccessBar(
-                                  stat: stat,
-                                  showLowDataStates: true,
-                                ),
-                              ),
-                          ],
+                      'Hazır = üst üste en az '
+                      '${SrsEngine.difficultyKolayRepetitions} kez doğru '
+                      'bildiğin kartlar. En az hazır deste üstte.',
+                  child: Column(
+                    children: [
+                      for (final readiness in deckReadiness)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: AppTheme.space16,
+                          ),
+                          child: _DeckReadinessBar(readiness: readiness),
                         ),
-                ),
-              ];
-
-              return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _MetricRow(
-                      columns: _metricColumnsFor(size),
-                      streak: streak,
-                      total: log.total,
-                      activeDays: log.activeDays,
-                      today: log.countOn(today),
-                      dailyGoal: dailyGoal,
-                    ),
-                    const SizedBox(height: AppTheme.space16),
-                    _SectionGrid(
-                      columns: _columnsFor(size),
-                      left: leftSections,
-                      right: rightSections,
-                    ),
-                    // Hiç kart yoksa tahmin edilecek yük de yok: bölüm
-                    // başlığıyla birlikte gizlenir.
-                    if (reviewForecast != null) ...[
-                      const SizedBox(height: AppTheme.space16),
-                      _SectionCard(
-                        icon: Icons.event_outlined,
-                        title: 'Önümüzdeki 7 gün',
-                        subtitle: 'Hangi gün kaç kartın tekrara düşeceği. '
-                            'Gecikmiş kartlar bugüne sayılır.',
-                        child: ReviewForecastChart(days: reviewForecast),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
-              );
-            },
-          ),
+              // Tek deneme trend değil: 2'den az sonuçta başlığıyla
+              // birlikte tüm bölüm gizlenir (bkz. ExamTrendChart.shouldShow).
+              if (ExamTrendChart.shouldShow(examResults))
+                _SectionCard(
+                  icon: Icons.show_chart,
+                  title: 'Deneme sınavı trendi',
+                  child: ExamTrendChart(results: examResults),
+                ),
+            ];
+
+            final rightSections = <Widget>[
+              _SectionCard(
+                icon: Icons.my_location_outlined,
+                title: 'Konu başarısı',
+                subtitle: 'Başarı = doğru cevap oranı. En zayıf konular üstte.',
+                child: topicStats.isEmpty
+                    ? _EmptyTopics()
+                    : Column(
+                        children: [
+                          for (final stat in topicStats)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppTheme.space16,
+                              ),
+                              child: TopicSuccessBar(
+                                stat: stat,
+                                showLowDataStates: true,
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ];
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _MetricRow(
+                    columns: _metricColumnsFor(size),
+                    streak: streak,
+                    total: log.total,
+                    activeDays: log.activeDays,
+                    today: log.countOn(today),
+                    dailyGoal: dailyGoal,
+                  ),
+                  const SizedBox(height: AppTheme.space16),
+                  _SectionGrid(
+                    columns: _columnsFor(size),
+                    left: leftSections,
+                    right: rightSections,
+                  ),
+                  // Hiç kart yoksa tahmin edilecek yük de yok: bölüm
+                  // başlığıyla birlikte gizlenir.
+                  if (reviewForecast != null) ...[
+                    const SizedBox(height: AppTheme.space16),
+                    _SectionCard(
+                      icon: Icons.event_outlined,
+                      title: 'Önümüzdeki 7 gün',
+                      subtitle:
+                          'Hangi gün kaç kartın tekrara düşeceği. '
+                          'Gecikmiş kartlar bugüne sayılır.',
+                      child: ReviewForecastChart(days: reviewForecast),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -296,12 +296,15 @@ class _TodayCard extends StatelessWidget {
 /// alt metin), sağda opsiyonel bir görsel (hedef halkası).
 ///
 /// GÖRSEL AĞIRLIK (2026-08-05): dört kart artık eşit ağırlıkta DEĞİL.
-/// [emphasized] olan tek kart ("Bugün") büyük rakam + amber ikon + amber
-/// kenarlık alır; diğer üçü küçük rakam + nötr ikon + soluk etiketle geri
-/// çekilir. Amaç ekrandaki amberi seyreltmek: bu ekranda amber yalnızca
-/// "Bugün" kartında ve seri alevinde kalır, kalan ikonlar
-/// `onSurfaceVariant`. Yeni bir metrik eklerken bu ayrımı bozma —
-/// vurgulanan kart bir tane olmalı.
+/// [emphasized] olan tek kart ("Bugün") büyük rakam + amber ikon alır; diğer
+/// üçü küçük rakam + nötr ikon + soluk etiketle geri çekilir. Amaç ekrandaki
+/// amberi seyreltmek: bu ekranda amber yalnızca "Bugün" kartının ikonunda ve
+/// seri alevinde kalır, kalan ikonlar `onSurfaceVariant`. Yeni bir metrik
+/// eklerken bu ayrımı bozma — vurgulanan kart bir tane olmalı.
+/// (DÜZELTME 2026-08-11: "Bugün" kartının amber KENARLIĞI kaldırıldı —
+/// amber/gold temizliği, artık diğer üç kart gibi border'sız. İkonu hâlâ
+/// amber, bu satır o kadarını değiştirmedi; kullanıcı yalnızca kenarlığı
+/// hedef aldı.)
 ///
 /// [caption] artık opsiyonel: rakamı tekrarlayan açıklama cümleleri
 /// ("Serini koru, devam et!" gibi) kaldırıldı. Yalnızca metnin VERİ taşıdığı
@@ -341,7 +344,6 @@ class _StatCard extends StatelessWidget {
         : theme.textTheme.titleLarge;
 
     return Card(
-      shape: emphasized ? _emphasisShape(theme) : null,
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.space16),
         child: Row(
@@ -389,16 +391,6 @@ class _StatCard extends StatelessWidget {
     );
   }
 
-  /// Baskın kartın amber kenarlığı. Yarıçapı elle yazmak yerine tema
-  /// kartının şeklinden türetir — köşe yarıçapı tek yerde (cardTheme) kalsın.
-  static ShapeBorder? _emphasisShape(ThemeData theme) {
-    final base = theme.cardTheme.shape;
-    if (base is! RoundedRectangleBorder) return base;
-    return RoundedRectangleBorder(
-      borderRadius: base.borderRadius,
-      side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.5)),
-    );
-  }
 }
 
 /// Bölümleri iki sütuna dağıtır; [columns] 1 ise hepsini alt alta dizer
@@ -568,18 +560,21 @@ class _DeckReadinessBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final percent = readiness.readyPercent;
 
-    // Eşikler [TopicSuccessBar] ile birebir aynı: az hazırlık kırmızı, orta
-    // amber-ötesi (tertiary), iyi hazırlık primary.
-    final Color barColor;
-    if (percent < 50) {
-      barColor = scheme.error;
-    } else if (percent < 75) {
-      barColor = scheme.tertiary;
-    } else {
-      barColor = scheme.primary;
-    }
+    // 2026-08-11 amber/gold temizliği: eskiden hazırlık yüzdesine göre
+    // KIRMIZI/tertiary/primary (amber) arasında dallanıyordu ("Konu
+    // başarısı"ndan AYRI, bilinçli olarak kırmızıyı koruyordu — bkz. eski
+    // not). Kullanıcı bu çubuğu doğrudan mor→pembe TEK bir gradyana
+    // çevirmeyi istedi; artık dallanma YOK, `TopicSuccessBar`'ın semantik
+    // (durum) renkleriyle KARIŞTIRILMASIN — o widget'a dokunulmadı.
+    final percentColor = isDark
+        ? AppTheme.dashboardViolet
+        : AppTheme.dashboardVioletDeep;
+    final trackColor = isDark
+        ? AppTheme.heroNeutralFill
+        : AppTheme.dashboardSurfaceElevated;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,7 +593,7 @@ class _DeckReadinessBar extends StatelessWidget {
               '%$percent hazır',
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: barColor,
+                color: percentColor,
               ),
             ),
           ],
@@ -606,11 +601,19 @@ class _DeckReadinessBar extends StatelessWidget {
         const SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: readiness.readyRate,
-            minHeight: 8,
-            backgroundColor: scheme.surfaceContainerHighest,
-            valueColor: AlwaysStoppedAnimation(barColor),
+          child: Stack(
+            children: [
+              Container(height: 8, color: trackColor),
+              FractionallySizedBox(
+                widthFactor: readiness.readyRate.clamp(0.0, 1.0),
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.dashboardProgressGradient,
+                  ),
+                  child: SizedBox(height: 8),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 4),
