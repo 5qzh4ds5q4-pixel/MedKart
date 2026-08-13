@@ -30,7 +30,16 @@ devamında sırasıyla Deneme Sınavı kurulum ekranı, kart listesi ekranı,
 Kendini Test Et kurulumu, ortak `AppShell` (sidebar tek yerde), İstatistik
 ekranı ve son olarak Ayarlar ekranı "Obsidian Pulse" dashboard mockup'larına
 göre (amber→mor/pembe) yeniden tasarlandı — ayrıntılar "Devam Eden İş"
-bölümündeki 0.1-0.6 numaralı alt başlıklarda. Yine de kod
+bölümündeki 0.1-0.6 numaralı alt başlıklarda; 2026-08-12'de GLM ve flash-lite
+(`gemini-3.5-flash-lite`) ayrıntılı test edildi, ikisi de KESİN OLARAK
+reddedildi ve production `gemini-3.5-flash`'ta sabitlendi — bkz. "Devam Eden
+İş" 0.7 ve "GLM sağlayıcısı" bölümlerindeki kapanış notu; aynı oturumda
+`flashcard_prompt.dart` v22→v25 arası üç kez daha güncellendi (ayrıntı "Kart
+Üretim Kuralları"nda), iki geçici bayrak (`activeAiProvider`,
+`kDebugBypassCache`, model sabiti) kalıcı değerlerine geri alındı (667/667
+yeşil); 2026-08-13'te bu iki bayrak tekrar `grep` ile kontrol edildi, bu kez
+İKİSİ DE zaten doğruydu (düzeltme gerekmedi) ve `flutter test` 667/667 yeşil
+doğrulandı. Yine de kod
 > değiştikçe eskiyebilir — şüphelendiğin bir iddiayı grep ile hızlıca
 > doğrula ve bu dosyayı güncelle.
 
@@ -40,8 +49,27 @@ Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
 spaced-repetition çalışma kartı üretir. Hedef kitle: komite sınavına
 hazırlanan tıp fakültesi öğrencileri.
 
-## Devam Eden İş — KALDIĞIMIZ YER (2026-08-11)
+## Devam Eden İş — KALDIĞIMIZ YER (2026-08-12)
 > Yeni oturumda ÖNCE burayı oku. Bitince bu bölümü güncelle/temizle.
+
+### 0.7. GLM ve flash-lite — İKİSİ DE REDDEDİLDİ, KONU KAPANDI (2026-08-12)
+**KAPANIŞ NOTU:** Bugün GLM ve flash-lite (`gemini-3.5-flash-lite`) ayrıntılı
+test edildi. Flash-lite tarafında üç farklı prompt tekniği denendi
+(`flashcard_prompt.dart`, v23→v25: sinavTipiKurali/zorlukKurali için
+uzlaştırma cümlesi, `etiketlemeSonHatirlatmasi`'na "derinlik" dengesi cümlesi,
+`icerikKalitesiOrnegi` somut önce/sonra örneği) ama hiçbiri flash-lite'ın
+derinlik sorununu ÇÖZEMEDİ. **İkisi de KESİN OLARAK reddedildi — production
+artık `gemini-3.5-flash`'ta SABİT.** Bu konuyu tekrar açmadan önce YENİ bir
+model ya da YENİ bir prompt tekniği gerekir; mevcut yöntemler (GLM
+sağlayıcısı, flash-lite model geçişi, üç prompt tekniği) TÜKENMİŞTİR — aynı
+şeyi tekrar denemeden önce neyin FARKLI olacağını netleştir.
+- Kod tarafı kalıcı değerlerine geri alındı: `gemini_service.dart` →
+  `model = 'gemini-3.5-flash'`, `pdf_cache_service.dart` →
+  `kDebugBypassCache = false`, `ai_provider_config.dart` →
+  `activeAiProvider = AiProvider.gemini` (bu zaten değişmemişti, yalnızca
+  doğrulandı). Paket **667/667 yeşil**.
+- Ayrıntı için bkz. "GLM sağlayıcısı" bölümü (aşağıda) — artık bu kapanış
+  notuna atıf yapıyor.
 
 ### 0.6. Ayarlar ekranı — "ayarlar ekranı.png" mockup'ına göre kart-ızgara + VERİ DÜZELTMESİ
 `~/Downloads/ayarlar ekranı.png` referans alınarak `SettingsScreen` düz
@@ -353,6 +381,12 @@ tekrarlayan hata kalıbıydı. Kullanıcı onayıyla ikisi de geri alındı. Şu
   otomatik hafızadan daha güvenilir.
 - Test paketi bu iki değerle **667/667 yeşil** (2026-08-11'de doğrulandı;
   sayı 662'den 667'ye çıktı — aradaki commit'lerde yeni testler eklenmiş).
+- **2026-08-13 yeniden kontrol:** her iki dosya da `grep`'le tekrar okundu —
+  bu kez İKİSİ DE zaten doğru değerdeydi (`activeAiProvider = AiProvider.
+  gemini`, `kDebugBypassCache = false`), düzeltme GEREKMEDİ — bir önceki
+  oturumun (12 Ağustos, flash-lite testi sonrası) kapanışında zaten geri
+  alınmışlardı ve bu kez açık unutulmamış. `flutter test` yeniden
+  çalıştırıldı, **667/667 yeşil** doğrulandı (00:26, "All tests passed!").
 
 ### 0. 2026-08-10 dashboard tasarım işi — bu dosyaya İLK KEZ 11 Ağustos'ta işlendi
 Commit `f7199d4` (10 Ağustos 17:41), önceki oturumda hiç `CLAUDE.md`'ye
@@ -442,7 +476,7 @@ karışıyordu. `deck_list_screen.dart`'a `onOpenExam` callback'i eklendi.
   tarayıcıda çalıştığı canlı doğrulanamadı. Sonraki oturumda önce bunu
   doğrula, güvenip atlama.
 
-### 1. GLM sağlayıcısı — DEĞERLENDİRİLDİ, PRODUCTION'A ALINMADI
+### 1. GLM sağlayıcısı VE flash-lite — DEĞERLENDİRİLDİ, İKİSİ DE KESİN OLARAK REDDEDİLDİ
 Altyapı uçtan uca çalışıyor ve canlı doğrulandı (bkz. "GLM sağlayıcısı").
 Gerçek PDF'lerle kalite karşılaştırması yapıldı (iki çalıştırma, 145 + 157
 kart) ve **karar verildi: production Gemini'de kalıyor.**
@@ -453,8 +487,19 @@ kart) ve **karar verildi: production Gemini'de kalıyor.**
 - GLM kodu (`glm_service.dart`, `glm_transport.dart`, `ai-proxy`'nin `glm`
   dalı, 32 test) **SİLİNMEDİ, olduğu gibi duruyor** — ileride yeniden
   değerlendirilebilir. Yalnızca `activeAiProvider` artık `gemini`.
-- Yeniden denenirse ölçülecek ilk şey v19/v20 prompt sıkılaştırmalarının
-  el yazısı etiketleme oranına etkisi (bkz. aşağıdaki 2. madde).
+
+**KAPANIŞ (2026-08-12) — bkz. "Devam Eden İş" 0.7:** GLM'in ardından
+`gemini-3.5-flash-lite` (Gemini'nin kendi ucuz modeli) de ayrıntılı test
+edildi. Üç farklı prompt tekniği denendi (`flashcard_prompt.dart` v23→v25 —
+sinavTipiKurali/zorlukKurali uzlaştırma cümlesi, "derinlik" son
+hatırlatması, `icerikKalitesiOrnegi` somut örneği) ama flash-lite'ın
+derinlik sorunu (yüzeysel/tanım-düzeyi kart üretme eğilimi) HİÇBİRİYLE
+çözülmedi. **İkisi de (GLM + flash-lite) artık KESİN OLARAK reddedilmiş
+durumda — production `gemini-3.5-flash`'ta SABİT.** Bu konuyu tekrar açmadan
+önce YENİ bir model ya da YENİ bir prompt tekniği gerekir; v19-v25 arası
+denenen prompt teknikleri (el yazısı ayrımı, boş dizi genişletmesi,
+uzlaştırma/denge cümleleri, somut örnek) TÜKENMİŞTİR — aynı kalıptan bir
+dördüncü/beşinci varyant denemeden önce neyin FARKLI olacağını netleştir.
 
 ### 2. Prompt sıkılaştırmaları — CANLI ÖLÇÜM BEKLİYOR
 `kPromptVersion` bugün v18 → **v22** oldu (dördü de saf prompt metni, kodda

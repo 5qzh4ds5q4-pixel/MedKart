@@ -16,7 +16,7 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
-const String kPromptVersion = 'v23';
+const String kPromptVersion = 'v25';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -27,6 +27,24 @@ SINAV TİPİ KART (KLİNİK/PATOLOJİK HER BİLGİ İÇİN ZORUNLU — SEÇİCİ
 - ÖZELLİKLE: sayfada birden fazla sinir/kas/yapının hasar-bulgu ilişkisi tek tek listeleniyorsa (ör. bir tabloda 5 farklı sinir ve her birinin klinik bulgusu), HER BİRİ için ayrı bir sınav tipi kart üret — birkaçını örnek diye seçip diğerlerini atlamak YANLIŞ.
 - Bu kart kısa bir hasta/durum tarifiyle başlasın (2-3 cümle: yaş/cinsiyet, şikayet, muayene bulgusu gibi), ardından soruyu sorsun. Cevap aynı bilgiye dayansın ama soru doğrudan olmasın — önce senaryodan çıkarım gerektirsin.
 - Düz tanım/liste bilgisinde (ör. "el bileğinde kaç kemik var") sınav tipi kart ÜRETME; zorlama, gerek yoksa üretme.''';
+
+/// [sinavTipiKurali]'nin somut önce/sonra örneği — kuralın SOYUT tarifinin
+/// yeterince ikna edici olmadığı gerçek vakalarda modelin "zayıf" (düz tanım
+/// sorup geçen) kart üretmeye devam etmesi üzerine eklendi. [kartEtiketleriKurali]
+/// içindeki BİÇİM ÖRNEĞİ'nden bilinçli olarak AYRI: o örnek yalnızca ÇIKTI
+/// BİÇİMİNİ (dizi/pozisyon) gösterir, bu örnek İÇERİK KALİTESİNİ gösterir —
+/// ikisi karıştırılmasın diye ayrı bloklarda tutuluyor.
+const String icerikKalitesiOrnegi = '''
+İÇERİK KALİTESİ ÖRNEĞİ (aynı kaynak bilgiden iki farklı kart):
+Kaynak bilgi: "Bruselloz, kaynamamış süt ve taze peynir tüketimiyle bulaşır."
+
+ZAYIF kart (BUNU YAPMA — sadece tanım sorup geçiyor):
+Soru: "Bruselloz nasıl bulaşır?" Cevap: "Kaynamamış süt ve taze peynir tüketimiyle."
+
+GÜÇLÜ kart (BUNU YAP — aynı bilgiyi klinik vakaya dönüştürüyor):
+Soru: "40 yaşında çiftçi hastada 3 haftadır süren ateş, terleme ve eklem ağrısı var. Kırsal bölgede yaşayan akrabasından aldığı taze keçi peyniri düzenli tükettiği öğreniliyor. Kan kültüründe hangi etken üremesi beklenir?" Cevap: "Brucella (Bruselloz)"
+
+Sayfada klinik/patolojik bir ilişki varsa (kırık-sinir, bulaş yolu-hastalık, tablo satırı gibi), HER ZAMAN güçlü kart formatını tercih et — zayıf format yalnızca gerçekten başka çıkarım yapılamayan, salt isimlendirme bilgisinde kabul edilebilir.''';
 
 /// Cevapların açıklayıcılığı için ortak kural; hem [buildGeneralPrompt] hem
 /// [buildPagePrompt] tarafından paylaşılır.
@@ -172,7 +190,13 @@ const String etiketlemeSonHatirlatmasi =
     '**SON HATIRLATMA — elYazisindanMi alanı: Kalın yazı, madde işareti, '
     'renkli başlık veya tablo formatı = ASLA el yazısı değildir. Bu alan '
     'yalnızca gerçekten SONRADAN elle eklenmiş bir işaret için true olur. '
-    'Şüphedeysen false yaz.**';
+    'Şüphedeysen false yaz.**\n\n'
+    '**SON HATIRLATMA — derinlik: Yukarıdaki temkinlilik kuralları içerik '
+    'UYDURMAYI önlemek içindir, seni BASİTLEŞTİRMEYE zorlamaz. Sayfa '
+    'klinik bir ilişki/tablo/sayısal veri içeriyorsa, sinavTipiKurali\'ne '
+    'göre HER biri için sınav tipi kart üretmeyi ve zorlukKurali\'ne göre '
+    'gerçek zorluk seviyesini (kolay/orta/zor karışık) uygulamayı ASLA '
+    'atlama.**';
 
 /// Slayt kendi üzerinde numaralandırılmışsa o numarayı okutup "slaytNumarasi"
 /// alanına yazdıran kural; yalnızca [buildPagePrompt]'a, yalnızca görsel
@@ -373,6 +397,8 @@ $zorlukKurali
 
 $sinavTipiKurali
 
+$icerikKalitesiOrnegi
+
 $oncelikKurali
 
 $terminolojiStandardiKurali
@@ -399,6 +425,7 @@ KESİN KURALLAR:
 - ASLA inandırıcı görünen, konuyla "ilgili olabilecek" bir bilgi UYDURMA. Emin değilsen, ya da içerik gerçek bir ders materyaline benzemiyorsa, HİÇBİR KART ÜRETME — bu, yanlış bir kart üretmekten HER ZAMAN daha güvenlidir. Boş dizi döndürmek başarısızlık değildir; uydurma kart üretmek ise ciddi bir hatadır.
   Kötü örnek: Kaynakta olmayan ama "tipik ders içeriği gibi görünen" bir bilgi uydurup ondan kart üretmek (ör. tıbbi hiçbir şey içermeyen, alakasız bir el yazısı fotoğrafından "bulaşıcı hastalık kontrolü" kartı çıkarmak).
   İyi örnek: İçerik ders materyaline benzemiyorsa ya da konuyla hiç alakası yoksa boş dizi [] döndürüp hiçbir şey üretmemek.
+- ÖNEMLİ AYRIM: Yukarıdaki "emin değilsen üretme" ilkesi YALNIZCA bir kartın içeriğinin kaynakta GERÇEKTEN var olup olmadığıyla ilgilidir (uydurma riski). Bu ilke, bir kartın ZORLUĞUNU ya da TİPİNİ (sınav tipi/temel) güvenli/basit tutmak için KULLANILMAZ — sayfa gerçekten klinik/patolojik bir ilişki içeriyorsa, aşağıdaki sinavTipiKurali ve zorlukKurali TAM GÜÇLE geçerlidir, "temkinli olayım" diye düz/basit kart üretmeyi tercih etme.
 - Terminolojiyi (Latince/tıbbi/teknik) sayfadaki gibi koru.
 - $kaynakSadakatiKurali$goruntuBlogu
 
@@ -424,6 +451,8 @@ TABLO VE SAYISAL VERİ — ASLA ATLAMA:
 $zorlukKurali
 
 $sinavTipiKurali
+
+$icerikKalitesiOrnegi
 
 $oncelikKurali
 

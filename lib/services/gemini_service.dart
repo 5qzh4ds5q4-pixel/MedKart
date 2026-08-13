@@ -52,12 +52,6 @@ class GeminiService implements FlashcardGenerator {
   /// Anahtarınızın erişebildiği modelleri görmek için:
   /// GET https://generativelanguage.googleapis.com/v1beta/models
   // MODEL TESTİ: gemini-3.5-flash / gemini-2.5-flash / gemini-2.5-flash-lite arasında değiştir
-  // ┌────────────────────────────────────────────────────────────────────┐
-  // │ GEÇİCİ — 2026-08-07: kullanıcının isteğiyle 'gemini-3.5-flash'e     │
-  // │ GERİ ALINDI (flash-lite testi bitti). flash-lite denemek istersen   │
-  // │ 'gemini-3.5-flash-lite' yap — thinkingConfig artık otomatik atlanır │
-  // │ (bkz. supportsThinkingConfig), 400 hatası bir daha çıkmaz.          │
-  // └────────────────────────────────────────────────────────────────────┘
   static const String model = 'gemini-3.5-flash';
 
   /// Tek seferde gönderilebilecek not uzunluğu. Aşırı uzun metinleri API'ye
