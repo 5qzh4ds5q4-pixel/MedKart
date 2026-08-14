@@ -16,7 +16,7 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
-const String kPromptVersion = 'v25';
+const String kPromptVersion = 'v27';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -105,12 +105,50 @@ TERMİNOLOJİ YAZIM STANDARDI (yalnızca aşağıdaki KAPALI liste):
 /// hem [buildGeneralPrompt] hem [buildPagePrompt] tarafından paylaşılır.
 /// Sebep: kaynak slayt eski olabilir, kart onun adına "güncel kılavuz" iddiası
 /// üstlenmemeli.
+///
+/// (2026-08-14, v26→v27 GÜNCELLEMESİ): v26'da "yerine kaynağa atıf yap"
+/// tavsiyesi [kaynakReferansiGizlemeKurali] ile ÇELİŞTİĞİ gerekçesiyle
+/// KALDIRILMIŞTI. Bu YANLIŞ bir düzeltmeydi — kullanıcı geri bildirdi:
+/// tedavi/kılavuz bilgisinde "slayta göre" bir STİL tercihi değil, eski/
+/// güncel-olmayan bir kaynaktaki tedavi bilgisini kesin bir gerçekmiş gibi
+/// sunmayı önleyen bir GÜVENLİK ÖNLEMİDİR. v27'de tavsiye GERİ GETİRİLDİ ve
+/// [kaynakReferansiGizlemeKurali]'ne bir İSTİSNA maddesi eklendi — artık iki
+/// kural ÇAKIŞMIYOR, KAPSAMLARI AYRIK: bu kural tedavi/kılavuz/güncel pratik
+/// bilgisini kapsar (kaynağa atıf ZORUNLU), [kaynakReferansiGizlemeKurali]
+/// geri kalan HER ŞEYİ (stabil/mekanizma bilgisi) kapsar (kaynağa atıf YASAK).
 const String guncellikDiliYasagiKurali = '''
 GÜNCELLİK/OTORİTE DİLİ YASAK (tedavi ve kılavuz sorularında):
 - Kaynak materyal güncel olmayabilir; kart onun adına güncellik iddiası ÜSTLENMEZ. Soru ya da cevapta "güncel kılavuzlara göre", "günümüzde kabul edilen", "bugün önerilen", "birinci basamak tedavi", "standart tedavi" gibi GÜNCELLİK/OTORİTE iddia eden ifadeler ASLA kullanma.
-- Bunun yerine kaynağa atıf yapan bir dil kullan: "slayta göre", "bu kaynakta belirtildiği üzere", "kaynakta vurgulanan".
+- Bunun yerine kaynağa atıf yapan bir dil kullan: "slayta göre", "bu kaynakta belirtildiği üzere", "kaynakta vurgulanan". Bu kuralın gerektirdiği "slayta göre" ifadesi, KAYNAK REFERANSI GİZLEME KURALI'nın istisnasıdır — orada YASAKLANAN ifade, burada ZORUNLUDUR.
 - Kötü örnek: "Güncel kılavuzlara göre X tedavisi önceliklidir."
 - İyi örnek: "Slayta göre X tedavisi vurgulanmaktadır."''';
+
+/// Kart metninde (soru kökü, şıklar VE açıklama/cevap dahil HER ALAN) kaynağa
+/// doğrudan atıf yapılmasını yasaklayan kural; hem [buildGeneralPrompt] hem
+/// [buildPagePrompt] tarafından paylaşılır. Kullanıcı talimatıyla 2026-08-14'te
+/// (v26) eklendi; aynı gün (v27) [guncellikDiliYasagiKurali] ile kapsam
+/// çakışmasını gidermek için bir İSTİSNA maddesi eklendi.
+///
+/// [guncellikDiliYasagiKurali] İLE ARTIK ÇELİŞMİYOR — KAPSAMLARI AYRIK: bu
+/// kural tedavi/kılavuz/güncel pratik DIŞINDAKİ (stabil/mekanizma) bilgiyi
+/// kapsar; [guncellikDiliYasagiKurali] tedavi/kılavuz bilgisini kapsar ve
+/// orada "slayta göre" ZORUNLUDUR (bkz. aşağıdaki İSTİSNA maddesi — ayrım
+/// ölçütü zamanla değişebilirlik: tedavi/doz/kılavuz önerisi mi, yoksa
+/// tanım/anatomi/patofizyoloji gibi stabil bilgi mi).
+///
+/// [elYazisiKurali]'ndaki "el yazısı"/"görselde" atıf yasağıyla KARIŞTIRILMAMALI
+/// — o DAR bir kural, yalnızca bilginin el yazısından/görselden geldiğini
+/// söylemeyi yasaklar. Bu kural GENEL: slayt/tablo/sunum/ders/kaynak gibi HER
+/// TÜR kaynak referansını kapsar (yukarıdaki tedavi/kılavuz istisnası hariç).
+const String kaynakReferansiGizlemeKurali = '''
+KAYNAK REFERANSI GİZLEME (soru kökü, şıklar VE açıklama/cevap dahil HER ALAN):
+- Kartlar HER ZAMAN kaynaktaki bilgiye dayanarak üretilir, bu değişmez. Ancak üretilen METİNDE kaynağa atıf yapan hiçbir ifade KULLANILMAZ: "slayta göre", "slaytta belirtildiği gibi", "kaynağa göre", "verilen bilgiye göre", "yukarıdaki tabloya göre", "tabloda belirtilen", "sunuma göre", "derse göre" ve benzerleri KESİNLİKLE YASAK.
+- Bunun yerine bilgi doğrudan tıbbi/bilimsel bir OLGU olarak sunulur — sanki bağımsız bir TUS kaynağından geliyormuş gibi.
+- İSTİSNA: Bu kural, TEDAVİ/KILAVUZ/GÜNCEL PRATİK içeren kartlara (GÜNCELLİK/OTORİTE DİLİ YASAK kuralının kapsadığı alan) UYGULANMAZ. O tür kartlarda "slayta göre" ifadesi ZORUNLU kalmaya devam eder — çünkü bu, eski/güncel olmayan bir kaynaktan gelen tedavi bilgisini kesin bir gerçekmiş gibi sunmayı önleyen bir güvenlik önlemidir, stil tercihi değildir. Ayrım ölçütü: bu bilgi zamanla değişebilir mi (tedavi, doz, birinci basamak seçimi, kılavuz önerisi) yoksa stabil/mekanizma bilgisi mi (tanım, anatomi, patofizyoloji, bulaş yolu gibi zamanla değişmeyen bilgi)? İlki için "slayta göre" zorunlu kalır, ikincisi için bu kural geçerlidir.
+- Kötü örnek (soru): "Slayta göre listeriozis etkenini taşıyan canlı grupları hangileridir?"
+- İyi örnek (soru): "Listeriozis etkenini taşıyan canlı gruplar hangileridir?"
+- Kötü örnek (açıklama): "Slayttaki tabloya göre listeriozis etkenini taşıyanlar..."
+- İyi örnek (açıklama): "Listeriozis etkenini pek çok memeli hayvan, kuşlar ve bazen insan taşır. Geniş bir rezervuar çeşitliliğine sahiptir."''';
 
 /// Sınav Modu filtresinin dayandığı "oncelik" etiketi için ortak kural;
 /// hem [buildGeneralPrompt] hem [buildPagePrompt] tarafından paylaşılır.
@@ -405,6 +443,8 @@ $terminolojiStandardiKurali
 
 $guncellikDiliYasagiKurali
 
+$kaynakReferansiGizlemeKurali
+
 $ikiKatmanliCevapKurali
 ${hasMedia ? '\n$elYazisiKurali\n\n$belirsizElYazisiKurali\n' : ''}
 HER KART İÇİN:
@@ -459,6 +499,8 @@ $oncelikKurali
 $terminolojiStandardiKurali
 
 $guncellikDiliYasagiKurali
+
+$kaynakReferansiGizlemeKurali
 
 $ikiKatmanliCevapKurali
 ${hasImage ? '\n$elYazisiKurali\n\n$belirsizElYazisiKurali\n\n$slaytNumarasiKurali\n' : ''}

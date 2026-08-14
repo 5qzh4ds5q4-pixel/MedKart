@@ -39,7 +39,20 @@ reddedildi ve production `gemini-3.5-flash`'ta sabitlendi — bkz. "Devam Eden
 `kDebugBypassCache`, model sabiti) kalıcı değerlerine geri alındı (667/667
 yeşil); 2026-08-13'te bu iki bayrak tekrar `grep` ile kontrol edildi, bu kez
 İKİSİ DE zaten doğruydu (düzeltme gerekmedi) ve `flutter test` 667/667 yeşil
-doğrulandı. Yine de kod
+doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
+> yeni bir `kaynakReferansiGizlemeKurali` bloğu eklendi (v25→v26) — bu, o
+> ana kadar `guncellikDiliYasagiKurali`'nın (v18, 2026-08-05) "güncellik
+> dilinden kaçınmak için kaynağa atıf yap ('slayta göre' vb.)" tavsiyesiyle
+> DOĞRUDAN ÇELİŞİYORDU; çelişki kodu okurken fark edildi ve o tavsiye
+> KALDIRILARAK "çözüldü" — ama bu YANLIŞ bir düzeltmeydi: kullanıcı AYNI
+> oturumda geri bildirdi, tedavi/kılavuz bilgisinde "slayta göre" bir stil
+> tercihi değil, eski kaynaktan gelen tedavi bilgisinin kesin gerçekmiş gibi
+> sunulmasını önleyen bir GÜVENLİK ÖNLEMİ. v27'de doğru çözümle düzeltildi:
+> tavsiye GERİ GETİRİLDİ, `kaynakReferansiGizlemeKurali`'ne bir İSTİSNA
+> maddesi eklendi (ayrım ölçütü: tedavi/doz/kılavuz gibi zamanla değişebilen
+> bilgi mi, yoksa tanım/anatomi/patofizyoloji gibi stabil bilgi mi) — artık
+> iki kural ÇAKIŞMIYOR, KAPSAMLARI AYRIK (bkz. "Kart Üretim Kuralları").
+> CANLI ÖLÇÜLMEDİ. Yine de kod
 > değiştikçe eskiyebilir — şüphelendiğin bir iddiayı grep ile hızlıca
 > doğrula ve bu dosyayı güncelle.
 
@@ -780,14 +793,43 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
   terimi düzeltme") — yoksa model bundan genel bir "terimleri düzelt" yetkisi
   çıkarıp kaynak sadakatini aşındırırdı. Listeye terim eklerken bu sınırı
   koru.
-- **`guncellikDiliYasagiKurali` (2026-08-05, HER İKİ YOL):** kart metni
-  güncellik/otorite iddiası taşıyamaz — "güncel kılavuzlara göre",
-  "günümüzde kabul edilen", "birinci basamak/standart tedavi" gibi ifadeler
-  YASAK; yerine kaynağa atıf ("slayta göre", "bu kaynakta belirtildiği
-  üzere"). Sebep: kaynak slayt eski olabilir, kart onun adına güncellik
-  iddiası üstlenmemeli. NOT: el yazısı kuralındaki "kaynağa atıf YASAK" ile
-  karıştırma — o, bilginin NEREDEN geldiğini (el yazısı/görsel) söylemeyi
-  yasaklar; bu kural ise tam tersine kaynağa atfı ZORUNLU kılar.
+- **`guncellikDiliYasagiKurali` (2026-08-05, HER İKİ YOL — 2026-08-14'te v27'de
+  DÜZELTİLDİ):** kart metni güncellik/otorite iddiası taşıyamaz — "güncel
+  kılavuzlara göre", "günümüzde kabul edilen", "birinci basamak/standart
+  tedavi" gibi ifadeler YASAK; yerine kaynağa atıf yapan bir dil kullanılır:
+  "slayta göre", "bu kaynakta belirtildiği üzere", "kaynakta vurgulanan".
+  Sebep: kaynak slayt eski olabilir, kart onun adına güncellik iddiası
+  üstlenmemeli — **tedavi/kılavuz bilgisinde "slayta göre" bir stil tercihi
+  DEĞİL, eski/güncel-olmayan bir kaynaktaki tedavi bilgisini kesin bir
+  gerçekmiş gibi sunmayı önleyen bir GÜVENLİK ÖNLEMİDİR.**
+  **TARİHÇE (v26→v27 dalgalanması):** v26'da bu "kaynağa atıf yap" tavsiyesi
+  aşağıdaki `kaynakReferansiGizlemeKurali` ile çeliştiği gerekçesiyle
+  KALDIRILMIŞTI — bu YANLIŞ bir düzeltmeydi (kullanıcı aynı gün geri bildirdi).
+  v27'de tavsiye GERİ GETİRİLDİ, çakışma `kaynakReferansiGizlemeKurali`'ne
+  eklenen bir İSTİSNA maddesiyle çözüldü (aşağı bkz.) — artık iki kural
+  ÇAKIŞMIYOR, KAPSAMLARI AYRIK. NOT: el yazısı kuralındaki "kaynağa atıf
+  YASAK" ile karıştırma — o, bilginin NEREDEN geldiğini (el yazısı/görsel)
+  söylemeyi yasaklar; bu kural TAM TERSİNE tedavi/kılavuz bağlamında kaynağa
+  atfı ZORUNLU kılar.
+- **`kaynakReferansiGizlemeKurali` (YENİ, 2026-08-14, kullanıcı talimatıyla,
+  HER İKİ YOL, v26'da eklendi + v27'de İSTİSNA maddesiyle düzeltildi):** kart
+  metninin HİÇBİR ALANINDA (soru kökü, şıklar, açıklama/cevap) kaynağa atıf
+  yapan ifade KULLANILAMAZ — "slayta göre", "slaytta belirtildiği gibi",
+  "kaynağa göre", "verilen bilgiye göre", "yukarıdaki tabloya göre", "tabloda
+  belirtilen", "sunuma göre", "derse göre" ve benzerleri KESİN YASAK. Bilgi
+  her zaman slayttaki içeriğe dayanır (bu değişmedi), yalnızca metinde
+  bağımsız bir tıbbi olgu gibi sunulur.
+  **İSTİSNA (v27, `guncellikDiliYasagiKurali` ile çakışmayı gidermek için
+  eklendi):** bu kural TEDAVİ/KILAVUZ/GÜNCEL PRATİK içeren kartlara
+  UYGULANMAZ — o alan tamamen `guncellikDiliYasagiKurali`'nin kapsamında ve
+  orada "slayta göre" ZORUNLU. Ayrım ölçütü: bilgi zamanla değişebilir mi
+  (tedavi, doz, birinci basamak seçimi, kılavuz önerisi) yoksa stabil/
+  mekanizma bilgisi mi (tanım, anatomi, patofizyoloji, bulaş yolu gibi
+  zamanla değişmeyen bilgi)? İlki `guncellikDiliYasagiKurali`'ye (atıf
+  ZORUNLU), ikincisi bu kurala (atıf YASAK) girer.
+  El yazısı kuralındaki dar "el yazısı/görselde" atıf yasağından FARKI: bu
+  kural GENEL, kaynak türünden bağımsız HER ifadeyi kapsar (tedavi/kılavuz
+  istisnası hariç). **CANLI ÖLÇÜLMEDİ.** `kPromptVersion` v25→v26→**v27**.
 
 ## Hata Yönetimi (`gemini_transport.dart` + `pdf_card_pipeline.dart` ile doğrulandı)
 - **Savunmasız cast bug'ı (çözüldü):** API cevabını `as List` ile cast etmeden
@@ -1509,7 +1551,10 @@ tekrar tekrar yazılıyordu). **Öğrenciye giden veri/davranış HİÇ değişm
 - Her iki yola da (Yol A `generateForPage` + Yol B `generate`) uygulandı —
   ikisi zaten aynı `responseSchema` sabitini paylaşıyor. DeepSeek'in
   `_jsonFormatTalimati` zarfı da (`{"cards": [...]}`) kompakt diziye hizalandı.
-- `kPromptVersion` şu an **v22**. Tarihçe: v14 → v15 (kompakt biçim), 2026-08-05'te
+- `kPromptVersion` şu an **v27** (DÜZELTME 2026-08-14: bu satır uzun süre
+  "v22" diye eski kalmıştı, gerçek dosya o zamandan beri v25'e kadar
+  ilerlemişti — sürüm sayısını değiştirirken bu paragrafı da güncellemeyi
+  unutma). Tarihçe: v14 → v15 (kompakt biçim), 2026-08-05'te
   üç kez daha arttı — v16 (cevap uzunluğu "1-3"→"2-4" eşitlemesi +
   slaytNumarasi satırındaki yön düzeltmesi), v17 (kapanış/teşekkür slaydı
   filtresi + öncelik kalibrasyonunun sıkılaştırılması), v18
@@ -1518,8 +1563,19 @@ tekrar tekrar yazılıyordu). **Öğrenciye giden veri/davranış HİÇ değişm
   (`elYazisiKurali` vurgu/tasarım ayrımı), v20 (`metinVeGorselBirlikteKurali`
   aynı ayrımla hizalandı), v21 (Yol A "boş dizi" kuralı ders-dışı içeriği
   kapsadı), v22 (aynı kural Yol B'ye eklendi + "5-20 kart" alt sınır
-  olmadığı netleşti). Hepsinin ayrıntısı "Kart Üretim Kuralları"
-  bölümünde. Eski `pdf_cache` kayıtları etkilenmez:
+  olmadığı netleşti); 2026-08-12'de flash-lite denemeleri için üç kez daha
+  arttı — v23-v25 (sinavTipiKurali/zorlukKurali uzlaştırma cümlesi,
+  etiketlemeSonHatirlatmasi "derinlik" dengesi, icerikKalitesiOrnegi somut
+  önce/sonra örneği — bkz. "Devam Eden İş" 0.7 kapanış notu, flash-lite
+  yine de reddedildi); 2026-08-14'te iki kez daha arttı — v26
+  (`kaynakReferansiGizlemeKurali` YENİ eklendi, `guncellikDiliYasagiKurali`
+  onunla "çelişmeyecek" diye kaynağa atıf tavsiyesi KALDIRILARAK
+  güncellendi — bu YANLIŞ bir düzeltmeydi), v27 (aynı gün, kullanıcı
+  düzeltmesiyle: `guncellikDiliYasagiKurali`'ndeki kaynağa atıf tavsiyesi
+  GERİ GETİRİLDİ, `kaynakReferansiGizlemeKurali`'ne tedavi/kılavuz için bir
+  İSTİSNA maddesi eklendi — iki kural artık KAPSAM AYRIMIYLA bir arada
+  yaşıyor, bkz. "Kart Üretim Kuralları"). Hepsinin ayrıntısı "Kart Üretim
+  Kuralları" bölümünde. Eski `pdf_cache` kayıtları etkilenmez:
   orada saklanan şey ham model çıktısı değil, çözülmüş `Flashcard` JSON'u —
   ayrıca lookup sürüme göre filtrelemiyor (bkz. `pdf_cache_service.dart`
   `save` doc yorumu), yani sürüm artışının bugün fonksiyonel etkisi YOK,
@@ -1863,6 +1919,16 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   gitmeli. Yol B'nin kendisi kaldırılmadı, hâlâ metin/görsel girişi için
   aktif ve öyle kalmalı.
 - El yazısı bilgisini soru/cevap metnine yazma, sadece isHandwritten flag.
+- Kart metninde (soru/şık/açıklama) "slayta göre", "kaynağa göre", "tabloya
+  göre", "sunuma göre" gibi kaynak atfı kullanma — **TEDAVİ/KILAVUZ/GÜNCEL
+  PRATİK bilgisi HARİÇ** (`guncellikDiliYasagiKurali`'nin kapsamı — orada
+  "slayta göre" ZORUNLU, bu bir güvenlik önlemi, stil tercihi değil).
+  `kaynakReferansiGizlemeKurali` (2026-08-14, v27) bu ikisini bir İSTİSNA
+  maddesiyle ayırıyor; ikisinden birini diğerinin tavsiyesine göre "tutarlı
+  hâle getirmeye" çalışıp KALDIRMA — v26'da tam bu hata yapılmıştı
+  (`guncellikDiliYasagiKurali`'ndeki atıf tavsiyesi silinmişti) ve kullanıcı
+  aynı gün v27'de düzeltti. İkisi KASITLI olarak kapsam ayrımıyla bir arada
+  duruyor, bkz. "Kart Üretim Kuralları".
 - Kompakt kart dizisinin eleman SIRASINI değiştirme/araya alan ekleme —
   pozisyonlar `kompakt*Index` sabitlerinde tek yerde tanımlı, prompt metni de
   çözücü de oradan besleniyor (bkz. "Kompakt kart çıktı biçimi"). Yeni bir
