@@ -1948,11 +1948,30 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
     saymayacak. Bu KASITLI: 10 lookup'lık bir örneklemde kaybedilecek bir şey
     yok, eskimiş kalite servis etmektense yeniden üretmek doğru. Kayıtlar
     PDF'ler yeniden yüklendikçe güncel sürümle EZİLEREK tazelenecek.
-  - **DEPLOY DURUMU:** İstemci tarafı commit'lendi ama `pdf-cache` Edge
-    Function'ı **HENÜZ DEPLOY EDİLMEDİ** (`npx supabase functions deploy
-    pdf-cache`). Ara durum GÜVENLİ: eski fonksiyon `min_prompt_version`
-    alanını tanımaz ve sessizce yok sayar, yani deploy edilene kadar davranış
-    bugünküyle AYNI kalır — bozuk bir ara durum yok.
+  - **✅ DEPLOY EDİLDİ VE CANLI DOĞRULANDI (2026-08-17).**
+    `npx supabase functions deploy pdf-cache` (Docker gerekmedi, uzaktan
+    bundle). Dört senaryo gerçek uç noktaya atılan isteklerle doğrulandı:
+
+    | Senaryo | Sonuç |
+    |---|---|
+    | Olmayan hash | `{found:false}` ✓ |
+    | Gerçek v16 kayıt + eşik v27 | `{found:false, stale:true, stored_prompt_version:"v16"}`, **`hit_count` ARTMADI** ✓ |
+    | Gerçek v16 kayıt + eşik v16 | `{found:true}`, 133 kart, `hit_count` 2→3 ✓ |
+    | Eşik hiç gönderilmedi | `{found:true}`, `hit_count` 3→4 ✓ (geriye dönük uyumlu) |
+
+    Yani hem yeni kapı hem ESKİ HIT yolu sağlam; bayat sorgu sayacı
+    artırmıyor (filtre doğru yerde, RPC'den ÖNCE). NOT: 3. ve 4. testler
+    gerçek HIT olduğu için o kaydın `hit_count`'u 2→4 çıktı — ölçüm
+    kaynaklı, gerçek kullanım değil.
+  - **`save` TARAFI CANLI DENENMEDİ — BİLİNÇLİ.** Güvenli bir prob yolu yok:
+    var olan bir hash'e sahte kartla `save` atmak, mantıkta bir hata olsaydı
+    133 gerçek kartı silerdi; olmayan bir hash'e atmak ise silinemeyen bir çöp
+    satır bırakırdı (anon DELETE kapalı — 2026-07-21'de tam olarak bu
+    yaşanmış, bkz. `20260721000003_cleanup_rls_probe_row.sql`). Ezme dalı
+    bir sonraki GERÇEK PDF yüklemesinde kendiliğinden çalışacak: lookup bayat
+    diyecek → kartlar yeniden üretilecek → `save` v28 ile kaydı EZECEK.
+    **İlk yüklemeden sonra `prompt_version`'ın gerçekten güncellendiğini
+    doğrula.**
   - Test: `test/prompt_version_gate_test.dart` (13 test — sürüm ayrıştırma,
     eşik sınırları, sürümsüz kayıt, eşiğin `kPromptVersion`'ı aşmadığı
     güvencesi, istemci gövdesi). Sunucu tarafı (Deno) bu depoda test
