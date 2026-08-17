@@ -1913,6 +1913,51 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
     (deny all, policy yok), `kullanici_kutuphane` → `[]`
     (`auth.uid() = user_id`). İkisi de beklendiği gibi.
 
+- **BAYATLIK KAPISI (2026-08-17) — kod HAZIR, `pdf-cache` HENÜZ DEPLOY
+  EDİLMEDİ.** Yukarıdaki (2) numaralı bulgunun ("önbellekteki her kayıt eski
+  prompt sürümünden") çözümü. **İKİ değişiklik BİRLİKTE yapıldı, biri diğeri
+  olmadan İŞE YARAMAZ — ayırma:**
+  1. **lookup filtresi:** istemci artık `min_prompt_version` gönderiyor;
+     sunucu bundan eski (ya da sürümsüz) kaydı İSABET SAYMIYOR
+     (`found: false`, ayrıca tanı için `stale: true` +
+     `stored_prompt_version`). Bayat kayıtta `hit_count` de ARTIRILMIYOR —
+     gerçekten kullanılmadı, sayaç gerçeği yansıtmalı.
+  2. **save artık EZİYOR:** eskiden `ignoreDuplicates: true` ("ilk kaydeden
+     kazanır") idi. **Yalnızca (1) yapılsaydı durum DAHA KÖTÜ olurdu:** bayat
+     kayıt yerinde kalır, her kullanıcı yeniden üretir (tam maliyet) ve
+     önbellek ASLA tazelenmezdi. Artık sürüm karşılaştırılıyor: gelen sürüm
+     eldekinden DAHA YENİYSE kayıt ezilir. Eşit sürümde dokunulmaz (aynı PDF
+     + aynı prompt = aynı içerik, gereksiz yazma yok). Gelen sürüm
+     çözülemiyorsa ASLA ezilmez (sürümsüz kayıt, sürümlünün yerini almamalı).
+     `hit_count` payload'da olmadığı için `ON CONFLICT DO UPDATE` onu
+     değiştirmez — sayaç korunur.
+  - **Eşik: `flashcard_prompt.dart` → `kMinCacheablePromptVersion` (şu an
+    **27**).** `kPromptVersion` İLE AYNI ŞEY DEĞİL, bilinçli olarak ayrı: her
+    sürüm artışı kart İÇERİĞİNİ değiştirmez (ör. v28 saf maliyet/cache
+    düzeltmesiydi, v27 kartları içerik olarak ayırt edilemez). İkisini
+    eşitlemek sağlam kayıtları boşuna çöpe atardı. **Yalnızca kart
+    içeriğini/etiketlerini gerçekten değiştiren bir kural eklendiğinde artır.**
+    27 seçildi çünkü kart metnini etkileyen en yeni kural
+    (`kaynakReferansiGizlemeKurali`) DOĞRU hâliyle v27'de geldi (v26 hatalıydı).
+  - **Eşik SUNUCUDA SABİT DEĞİL, istemciden geliyor** — politika prompt
+    kurallarının yanında duruyor (kuralı ekleyen kişi eşiği de orada görür) ve
+    değiştirmek Edge Function deploy'u GEREKTİRMİYOR. `min_prompt_version`
+    gönderilmezse filtre uygulanmaz (geriye dönük uyumlu).
+  - **BEKLENEN İLK ETKİ: önbellek fiilen boşalır.** Canlıdaki 6 kaydın HEPSİ
+    (v16/v23/v24 + 3 sürümsüz) eşiğin altında, yani hiçbiri artık isabet
+    saymayacak. Bu KASITLI: 10 lookup'lık bir örneklemde kaybedilecek bir şey
+    yok, eskimiş kalite servis etmektense yeniden üretmek doğru. Kayıtlar
+    PDF'ler yeniden yüklendikçe güncel sürümle EZİLEREK tazelenecek.
+  - **DEPLOY DURUMU:** İstemci tarafı commit'lendi ama `pdf-cache` Edge
+    Function'ı **HENÜZ DEPLOY EDİLMEDİ** (`npx supabase functions deploy
+    pdf-cache`). Ara durum GÜVENLİ: eski fonksiyon `min_prompt_version`
+    alanını tanımaz ve sessizce yok sayar, yani deploy edilene kadar davranış
+    bugünküyle AYNI kalır — bozuk bir ara durum yok.
+  - Test: `test/prompt_version_gate_test.dart` (13 test — sürüm ayrıştırma,
+    eşik sınırları, sürümsüz kayıt, eşiğin `kPromptVersion`'ı aşmadığı
+    güvencesi, istemci gövdesi). Sunucu tarafı (Deno) bu depoda test
+    EDİLEMİYOR.
+
 - **Model/prompt sürüm sütunları (2026-07-26, YARIM İŞ):** `pdf_cache`'e
   `model_version` / `prompt_version` sütunları eklendi (migration
   `20260726000000_add_pdf_cache_version_columns.sql`) — amaç prompt/model

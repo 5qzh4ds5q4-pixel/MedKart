@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/flashcard.dart';
+import 'flashcard_prompt.dart' show kMinCacheablePromptVersion;
 
 /// [PdfCacheService.lookup] bir HIT döndürdüğünde taşınan sonuç: kartların
 /// kendisi + o hash'in şimdiye kadar kaç kez HIT olduğu (kullanıcıya
@@ -100,7 +101,17 @@ class PdfCacheService {
               'Authorization': 'Bearer $anonKey',
               'apikey': anonKey,
             },
-            body: jsonEncode({'action': 'lookup', 'hash': hash}),
+            // `min_prompt_version`: bundan eski (ya da sürümsüz) kayıtlar
+            // İSABET SAYILMAZ — bkz. `flashcard_prompt.dart`
+            // `kMinCacheablePromptVersion`. Eşik SUNUCUYA GÖMÜLÜ DEĞİL,
+            // istemciden geliyor: politika prompt kurallarının yanında
+            // duruyor (kuralı ekleyen kişi eşiği de orada görür) ve
+            // değiştirmek Edge Function deploy'u GEREKTİRMİYOR.
+            body: jsonEncode({
+              'action': 'lookup',
+              'hash': hash,
+              'min_prompt_version': 'v$kMinCacheablePromptVersion',
+            }),
           )
           .timeout(const Duration(seconds: 15));
 
@@ -136,10 +147,14 @@ class PdfCacheService {
   /// [hash] için üretilen [cards]'ı önbelleğe kaydeder (best-effort,
   /// fire-and-forget — başarısızlık kullanıcıya hiç yansımaz).
   ///
-  /// [modelVersion]/[promptVersion] yalnızca KAYDEDİLİYOR — ileride
-  /// prompt/model güncellenince eski cache girdilerini ayırt edebilmek
-  /// için (bkz. `flashcard_prompt.dart` `kPromptVersion` yorumu). Okuma
-  /// (lookup) tarafında şu an bu değerlere göre bir filtreleme yok.
+  /// [promptVersion] ARTIK YALNIZCA KAYIT DEĞİL, İŞLEVSEL (2026-08-17):
+  /// lookup bu değere göre filtreliyor (bkz. `flashcard_prompt.dart`
+  /// [kMinCacheablePromptVersion]) ve sunucu, aynı hash için ELDEKİNDEN
+  /// DAHA YENİ bir sürüm gelirse kaydı EZİYOR — eskiden "ilk kaydeden
+  /// kazanır"dı ve bayat kayıt sonsuza kadar kalıyordu. Boş bırakma:
+  /// sürümsüz kayıtlar hiçbir zaman isabet saymaz.
+  ///
+  /// [modelVersion] hâlâ yalnızca kaydediliyor, filtrelemede kullanılmıyor.
   Future<void> save(
     String hash,
     List<Flashcard> cards, {

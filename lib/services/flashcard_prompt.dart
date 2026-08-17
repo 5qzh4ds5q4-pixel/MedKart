@@ -16,6 +16,52 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
+/// `pdf_cache`'ten servis edilmesi KABUL EDİLEBİLİR en eski prompt sürümü.
+/// Bundan eski (ya da sürümü hiç kaydedilmemiş) önbellek kayıtları lookup'ta
+/// İSABET SAYILMAZ; kartlar yeniden üretilir ve kayıt güncel sürümle
+/// EZİLİR.
+///
+/// NEDEN VAR (2026-08-17): `pdf_cache` isabet oranı ilk kez sorgulandığında
+/// önbellekteki 6 kaydın HEPSİNİN eski sürümlerden (v16/v23/v24 ve 3 kayıtta
+/// null) olduğu görüldü. Lookup sürüme göre filtrelemediği için bir isabet,
+/// o günden beri eklenmiş kalite kurallarının HİÇBİRİNİ taşımayan kartları
+/// servis ediyordu — yani önbellek "bedava" değil, "bedava ama eskimiş
+/// kalite" demekti.
+///
+/// **[kPromptVersion] İLE AYNI ŞEY DEĞİL, BİLİNÇLİ OLARAK AYRI.** Her sürüm
+/// artışı kart İÇERİĞİNİ değiştirmez: ör. v28 saf bir maliyet/cache
+/// düzeltmesiydi (sayfa numarası prompt'un başından alındı), v27 ile üretilmiş
+/// kartlar v28 ile üretilenlerden İÇERİK OLARAK AYIRT EDİLEMEZ. Bu sabiti
+/// [kPromptVersion]'a eşitlemek, mükemmel durumdaki kayıtları boşuna çöpe
+/// atardı.
+///
+/// **NE ZAMAN ARTIR:** yalnızca üretilen kartların İÇERİĞİNİ/etiketlerini
+/// gerçekten değiştiren bir kural eklediğinde ya da değiştirdiğinde. Salt
+/// biçim/maliyet/sıralama değişikliğinde ARTIRMA.
+///
+/// **ŞU ANKİ DEĞER NEDEN 27:** kart metnini etkileyen en yeni kural
+/// [kaynakReferansiGizlemeKurali]'nin DOĞRU hâli v27'de geldi (v26 hatalıydı:
+/// [guncellikDiliYasagiKurali]'ndaki kaynağa atıf tavsiyesini yanlışlıkla
+/// kaldırmıştı, bkz. o kuralın TARİHÇE notu). v27'den eski kartlar "slayta
+/// göre" ifadelerini gizlemiyor ve tedavi/kılavuz istisnasını taşımıyor.
+const int kMinCacheablePromptVersion = 27;
+
+/// `'v27'` → `27`. Sürüm yoksa/çözülemiyorsa `null` (çağıran taraf bunu "en
+/// eski" sayar). Sunucu tarafındaki `pdf-cache` fonksiyonunda AYNI mantığın
+/// TypeScript kopyası var — birini değiştirirsen diğerini de hizala.
+int? promptVersionNumber(String? version) {
+  if (version == null) return null;
+  final m = RegExp(r'^v(\d+)$').firstMatch(version.trim());
+  if (m == null) return null;
+  return int.tryParse(m.group(1)!);
+}
+
+/// Bu sürümle üretilmiş kartlar önbellekten servis edilebilir mi?
+bool isCacheablePromptVersion(String? version) {
+  final n = promptVersionNumber(version);
+  return n != null && n >= kMinCacheablePromptVersion;
+}
+
 // v29 (statik bloğun `systemInstruction`'a taşınması) DENENDİ, canlı ölçümde
 // hiçbir kazanç vermediği görüldü ve GERİ ALINDI — gönderilen prompt metni
 // yine v28 ile birebir aynı, o yüzden sürüm de v28'de kaldı. Bölme

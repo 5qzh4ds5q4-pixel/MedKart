@@ -11,13 +11,28 @@
 // yalnızca burada, service_role ile erişilir.
 //
 // İstek gövdesi:
-//   { action: 'lookup', hash: string }
+//   { action: 'lookup', hash: string, min_prompt_version?: string }
 //   { action: 'save', hash: string, cards: unknown[], model_version?: string, prompt_version?: string }
 //
-// model_version/prompt_version ŞİMDİLİK yalnızca kaydediliyor (ileride
-// prompt/model güncellenince eski cache girdilerini ayırt edebilmek için,
-// bkz. Flutter tarafında `flashcard_prompt.dart` `kPromptVersion`) —
-// lookup bu değerlere göre HİÇBİR filtreleme yapmıyor, davranış değişmedi.
+// PROMPT SÜRÜMÜ ARTIK İŞLEVSEL (2026-08-17). Öncesinde yalnızca kaydediliyordu
+// ve lookup hiç filtrelemiyordu; sonuç olarak önbellekteki kayıtların hepsi
+// eski prompt sürümlerinden kalmıştı ve bir isabet, o günden beri eklenmiş
+// kalite kurallarının hiçbirini taşımayan kartları servis ediyordu. İki
+// değişiklik BİRLİKTE yapıldı — biri diğeri olmadan işe yaramaz:
+//
+//   1) lookup: `min_prompt_version`'dan ESKİ (ya da sürümsüz) kayıt
+//      İSABET SAYILMAZ (`found: false`) ve hit sayacı ARTIRILMAZ.
+//   2) save:   eldekinden DAHA YENİ bir sürüm gelirse kayıt EZİLİR.
+//      Eskiden `ignoreDuplicates: true` ("ilk kaydeden kazanır") idi —
+//      yalnızca (1) yapılsaydı bayat kayıt sonsuza kadar kalır, her
+//      kullanıcı yeniden üretir (tam maliyet) ve önbellek ASLA kendini
+//      onaramazdı. Yani bu ikisi ayrılamaz.
+//
+// Eşik SUNUCUDA SABİT DEĞİL, istemciden geliyor (bkz. Flutter tarafında
+// `flashcard_prompt.dart` `kMinCacheablePromptVersion`): politika prompt
+// kurallarının yanında duruyor ve değiştirmek bu fonksiyonu yeniden deploy
+// etmeyi GEREKTİRMİYOR. `min_prompt_version` gönderilmezse filtre uygulanmaz
+// (eski istemcilerle geriye dönük uyumlu).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const CORS_HEADERS: Record<string, string> = {
@@ -33,6 +48,18 @@ interface CacheRequest {
   cards?: unknown[];
   model_version?: string;
   prompt_version?: string;
+  min_prompt_version?: string;
+}
+
+// 'v27' -> 27. Sürüm yoksa/çözülemiyorsa null ("en eski" sayılır).
+// Flutter tarafında `flashcard_prompt.dart` `promptVersionNumber` ile AYNI
+// mantık — birini değiştirirsen diğerini de hizala.
+function promptVersionNumber(version?: string | null): number | null {
+  if (typeof version !== "string") return null;
+  const m = /^v(\d+)$/.exec(version.trim());
+  if (m === null) return null;
+  const n = Number.parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -50,7 +77,8 @@ Deno.serve(async (req: Request) => {
     return jsonError(400, "Geçersiz JSON gövdesi.");
   }
 
-  const { action, hash, cards, model_version, prompt_version } = body;
+  const { action, hash, cards, model_version, prompt_version, min_prompt_version } =
+    body;
 
   if (!hash || typeof hash !== "string") {
     return jsonError(400, "hash eksik.");
@@ -63,7 +91,7 @@ Deno.serve(async (req: Request) => {
   if (action === "lookup") {
     const { data, error } = await supabase
       .from("pdf_cache")
-      .select("generated_cards, hit_count")
+      .select("generated_cards, hit_count, prompt_version")
       .eq("hash", hash)
       .maybeSingle();
 
@@ -71,6 +99,22 @@ Deno.serve(async (req: Request) => {
 
     if (data === null) {
       return jsonOk({ found: false, cards: null, hit_count: null });
+    }
+
+    // BAYAT KAYIT = İSABET DEĞİL. Sayaç da ARTIRILMAZ (gerçekten
+    // kullanılmadı) — yoksa hit_count gerçeği yansıtmaz.
+    const minVersion = promptVersionNumber(min_prompt_version);
+    if (minVersion !== null) {
+      const stored = promptVersionNumber(data.prompt_version);
+      if (stored === null || stored < minVersion) {
+        return jsonOk({
+          found: false,
+          cards: null,
+          hit_count: null,
+          stale: true,
+          stored_prompt_version: data.prompt_version ?? null,
+        });
+      }
     }
 
     // HIT — sayacı atomik artır (RPC, bkz. migration). Artırım başarısız
@@ -92,23 +136,50 @@ Deno.serve(async (req: Request) => {
     if (!Array.isArray(cards)) {
       return jsonError(400, "save için cards (dizi) gerekli.");
     }
-    // Aynı hash zaten kayıtlıysa dokunma (ilk kaydeden kazanır, tekrar
-    // yazmak gereksiz — içerik aynı PDF'ten geldiği için içerik de aynı
-    // kabul edilir).
-    const { error } = await supabase
+    // ESKİDEN "ilk kaydeden kazanır" (`ignoreDuplicates: true`) idi. Artık
+    // SÜRÜM KARŞILAŞTIRILIYOR: gelen sürüm eldekinden DAHA YENİYSE kayıt
+    // ezilir, değilse dokunulmaz. Bu olmadan lookup filtresi işe yaramazdı —
+    // bayat kayıt yerinde kalır, her kullanıcı yeniden üretir ve önbellek
+    // asla tazelenmezdi.
+    //
+    // Eşit sürümde de dokunmuyoruz: aynı PDF + aynı prompt = aynı içerik
+    // kabul edilir, gereksiz yazma yok (eski davranışın korunan kısmı).
+    const { data: mevcut, error: readError } = await supabase
       .from("pdf_cache")
-      .upsert(
-        {
-          hash,
-          generated_cards: cards,
-          model_version: model_version ?? null,
-          prompt_version: prompt_version ?? null,
-        },
-        { onConflict: "hash", ignoreDuplicates: true },
-      );
+      .select("prompt_version")
+      .eq("hash", hash)
+      .maybeSingle();
+
+    if (readError) {
+      return jsonError(500, `Önbellek okunamadı: ${readError.message}`);
+    }
+
+    if (mevcut !== null) {
+      const gelen = promptVersionNumber(prompt_version);
+      const eldeki = promptVersionNumber(mevcut.prompt_version);
+      // Gelen sürüm çözülemiyorsa ASLA ezme (sürümsüz bir kayıt, sürümlü
+      // bir kaydın yerini almamalı).
+      const dahaYeni = gelen !== null && (eldeki === null || gelen > eldeki);
+      if (!dahaYeni) return jsonOk({ ok: true, skipped: "not_newer" });
+    }
+
+    const { error } = await supabase.from("pdf_cache").upsert(
+      {
+        hash,
+        generated_cards: cards,
+        model_version: model_version ?? null,
+        prompt_version: prompt_version ?? null,
+      },
+      // `ignoreDuplicates: false` = çakışmada GÜNCELLE. Yukarıdaki kontrol
+      // zaten yalnızca daha yeni sürümlerin buraya ulaşmasını sağlıyor.
+      // NOT: `hit_count` payload'da OLMADIĞI için ON CONFLICT DO UPDATE
+      // onu değiştirmez — sayaç korunur (o, PDF'in popülerliğini ölçüyor,
+      // içeriğin sürümünü değil).
+      { onConflict: "hash", ignoreDuplicates: false },
+    );
 
     if (error) return jsonError(500, `Önbelleğe yazılamadı: ${error.message}`);
-    return jsonOk({ ok: true });
+    return jsonOk({ ok: true, written: true });
   }
 
   return jsonError(400, 'action "lookup" veya "save" olmalı.');
