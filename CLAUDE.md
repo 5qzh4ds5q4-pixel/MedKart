@@ -1708,10 +1708,13 @@ koruyor.
   proxy'liyor; `cachedContents` kaydı oluşturmak için **fonksiyonu değiştirip
   DEPLOY etmek** gerekiyor — yani denemenin kendisi bile üretime dokunmayı
   gerektiriyor. Karar kullanıcıya bırakıldı.
-- **En iyi kalan kaldıraç artık `pdf_cache`** (bkz. "Maliyet Optimizasyonu"):
-  isabet ettiğinde maliyet TAM SIFIR, kalite etkisi YOK (birebir aynı kartlar),
-  altyapı zaten mevcut ve `hit_count` sayacı zaten var — gerçek isabet oranı
-  bugüne kadar hiç sorgulanmadı.
+- **`pdf_cache` kaldıracı SORGULANDI (2026-08-17) ve "kalite nötr" olmadığı
+  ortaya çıktı** — ayrıntı "Maliyet Optimizasyonu"ndaki "İSABET ORANI İLK KEZ
+  SORGULANDI" maddesinde. Özet: isabet oranı ~%40 ama örneklem 10 lookup
+  (anlamsız derecede küçük), VE önbellekteki her kayıt eski prompt
+  sürümünden (v16-v24; v28 ile üretilmiş tek kayıt yok), yani isabet
+  bedava ama ESKİMİŞ kalite servis ediyor. Kapsamı genişletmeden önce
+  lookup'a sürüm eşiği eklenmeli.
 
 **ÖLÇÜM TEKRARLANABİLİR:** `tool/measure_cache_test.dart` (pakete dahil
 DEĞİL, `tool/` altında). Prompt/model değiştirdikten sonra tekrar çalıştır.
@@ -1856,6 +1859,44 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
   - UI: `AddCardsScreen._showCacheHitFeedback` — `hitCount >= 10` ise
     "⚡ Bu set daha önce işlenmiş — anında hazır! (N kez çalışıldı)", aksi
     halde sayısız kısa hâli (küçük sayı sosyal kanıt olarak motive etmez).
+- **İSABET ORANI İLK KEZ SORGULANDI (2026-08-17) — 3 BULGU:**
+  Canlı `pdf_cache` tablosu okundu (7 satır, 1'i 2026-07-21 smoke-test
+  artefaktı `smoketest-nonexistent-hash`, yani **6 gerçek PDF**).
+  | Ölçüt | Değer |
+  |---|---|
+  | Toplam isabet (`sum(hit_count)`) | **4** |
+  | En az bir kez tekrar kullanılan PDF | 3/6 (%50) |
+  | Tahmini toplam lookup | ~10 (6 kaçırma + 4 isabet) |
+  | **Tahmini isabet oranı** | **~%40** |
+  | Tarih aralığı | 2026-07-26 → 2026-08-08 (~2 hafta) |
+
+  **(1) Mekanizma ÇALIŞIYOR ama örneklem ANLAMSIZ derecede küçük.** 10 lookup
+  üzerinden çıkan %40'a dayanıp kapsam genişletme kararı VERME — bu sayı
+  tek bir kullanıcının test dönemine ait. Karar için gerçek kullanıcı
+  trafiği beklenmeli.
+
+  **(2) ⚠️ ÖNBELLEKTEKİ HER KAYIT ESKİ PROMPT SÜRÜMÜNDEN — "kalite etkisi
+  yok" iddiası BU YÜZDEN YANLIŞ.** Sürüm dağılımı: 3×null (sütunlar
+  2026-07-26'da eklendi), 2×v16, 1×v23, 1×v24. **Güncel sürümle (v28)
+  üretilmiş TEK BİR KAYIT YOK.** Lookup sürüme göre filtrelemediği için
+  (bkz. aşağıdaki "Model/prompt sürüm sütunları") bugün bir isabet, v16
+  döneminde üretilmiş kartları servis ediyor — yani `terminolojiStandardiKurali`,
+  `guncellikDiliYasagiKurali` (v18), el yazısı/vurgu ayrımı (v19-v20), ders-dışı
+  içerik boş-dizi kuralı (v21-v22) ve `kaynakReferansiGizlemeKurali` (v26-v27)
+  kurallarının HİÇBİRİ o kartlara uygulanmamış. **`pdf_cache` "bedava ve kalite
+  nötr" DEĞİL: bedava ama eskimiş kalite servis ediyor.** Bu, kapsamı
+  genişletmeden önce çözülmesi gereken asıl sorun — muhtemel çözüm lookup'ta
+  `prompt_version` eşiği (ör. "v18'den eski kayıtları isabet sayma").
+
+  **(3) ⚠️ GÜVENLİK — `pdf_cache` ANON KEY İLE OKUNABİLİYOR.** Bu dosyada
+  yıllardır "yalnızca `pdf-cache` Edge Function (service_role) erişir, istemci
+  doğrudan hiç dokunmaz" yazıyordu; **bu YANLIŞ**. `.env`'deki anon key ile
+  `GET /rest/v1/pdf_cache?select=*` 200 dönüyor ve `generated_cards` dahil TÜM
+  sütunlar okunuyor. Anon key derlenmiş istemci paketinde olduğu için pratikte
+  **herkes tüm önbelleklenmiş kartları çekebilir**. YAZMA yetkisi TEST EDİLMEDİ
+  (üretim tablosuna yazmayı denemek doğru olmazdı) — panelden RLS
+  policy'lerinin kontrol edilmesi gerekiyor.
+
 - **Model/prompt sürüm sütunları (2026-07-26, YARIM İŞ):** `pdf_cache`'e
   `model_version` / `prompt_version` sütunları eklendi (migration
   `20260726000000_add_pdf_cache_version_columns.sql`) — amaç prompt/model
