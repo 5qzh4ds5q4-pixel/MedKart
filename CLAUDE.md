@@ -1643,13 +1643,68 @@ açık talimatıyla v28 ile **AYNI ANDA** eklendi:
   zaten 30'dan fazla aynı tarz tanılama `print`'i taşıyor ve hiçbirinde ignore
   yok; yalnızca burada susturmak tutarsız olurdu. Yeni bir regresyon DEĞİL.
 
-**v28'in gerçek etkisi HÂLÂ ÖLÇÜLMEDİ** — altyapı hazır ama canlı bir PDF
-çalıştırması yapılmadı. Yukarıdaki tüm token rakamları hâlâ karakter→token
-tahminidir (3,7 krkt/token). İlk gerçek çalıştırmada `[USAGE ...]` satırlarına
-bakıp bu tahmini kalibre et.
+### ✅ CANLI ÖLÇÜLDÜ (2026-08-17) — cache ÇALIŞIYOR ama beklenenin ÜÇTE BİRİ
+`tool/measure_cache_test.dart` ile gerçek API'ye 4 ardışık GÖRSELSİZ çağrı
+yapıldı (`flutter test tool/measure_cache_test.dart`). Ham çıktı:
 
-Beklenen kazanç (cache isabet ederse): tipik sayfa $0,0213 → **$0,0131**
-(−%38,7), 500 sayfa/ay $14,60 → **$10,47** (−%28). Ayrıntı ve reddedilen
+```
+[USAGE s.1] girdi=5743 cache=YOK        çıktı=1280
+[USAGE s.2] girdi=5696 cache=1983 (%35) çıktı=1412
+[USAGE s.3] girdi=5679 cache=1983 (%35) çıktı=965
+[USAGE s.4] girdi=5682 cache=1983 (%35) çıktı=1303
+```
+
+**1. Cache GERÇEKTEN isabet ediyor — v28 çalışıyor.** İlk çağrı cache'i
+dolduruyor (beklenen), 2-4. çağrılar isabet ediyor. Yani "prompt ön ekini
+sabitlemek işe yarar mı" sorusu artık teorik değil: **EVET.**
+
+**2. AMA ortak ön ekin yalnızca ~%37'si önbelleklendi.** Ortak ön ek ~5.414
+token (16.569 krkt ÷ 3,06), önbelleklenen ise **1.983 token** — üç çağrıda da
+DEĞİŞMEDEN 1983, yani rastgele değil deterministik. Mekanizma BİLİNMİYOR
+(blok/kuantum sınırı olabilir; 1983 ≈ 2048'in hemen altı). Beklenti ön ekin
+TAMAMININ önbelleklenmesiydi; gerçekleşmedi. **Bu, örtük (implicit) cache'in
+bilinen bir sınırı olabilir** — bkz. googleapis/python-genai #1880 ("tutarsız
+cache isabeti").
+
+**3. KARAKTER→TOKEN ORANI DÜZELTİLDİ: 3,7 DEĞİL ~3,06.** Ölçülen `girdi`
+değerleri yerel karakter sayılarına bölününce dört çağrıda da 3,06 çıktı
+(Türkçe tıbbi metin İngilizceden daha kötü tokenize oluyor). **Bu dosyadaki ve
+maliyet raporlarındaki 3,7'ye dayanan TÜM token rakamları ~%21 DÜŞÜK
+TAHMİNDİ.** Düzeltilmiş statik blok boyutları:
+| Yol | Karakter | ESKİ tahmin (3,7) | GERÇEK (3,06) |
+|---|---|---|---|
+| Yol A görselsiz iskelet | 16.597 | 4.486 tkn | **5.424 tkn** |
+| Yol A görselli iskelet | 22.603 | 6.109 tkn | **7.386 tkn** |
+
+**4. GERÇEK TASARRUF, VAAT EDİLENİN ÇOK ALTINDA.** Ölçülen s.2 çağrısı:
+- cache'siz olsa: 5.696 × $1,50/M + 1.412 × $9/M = **$0,021252**
+- cache'li (ölçülen): (5.696−1.983) × $1,50/M + 1.983 × $0,15/M + çıktı
+  = **$0,018575**
+- tasarruf **$0,00268/sayfa = %12,6** (rapordaki vaat: %38,7)
+
+**SONUÇ — stratejik yön DEĞİŞTİ:** örtük cache az veriyor. Asıl kazanç artık
+**AÇIK (explicit) cache**'te: `CachedContent` kaydı oluşturulursa ön ekin
+TAMAMI (görselli yolda ~7.386 token) güvenilir biçimde önbelleklenir →
+sayfa başı ~$0,00997 tasarruf (%40 mertebesi). Bedeli: token-saat depolama
+ücreti + `ai-proxy`'de cache kaydını oluşturup adını payload'a koyan bir
+yönetim katmanı. Statik blok TÜM kullanıcılar ve TÜM PDF'ler için aynı
+olduğundan tek bir kayıt herkese hizmet edebilir.
+
+**ÖLÇÜM TEKRARLANABİLİR:** `tool/measure_cache_test.dart` (pakete dahil
+DEĞİL, `tool/` altında). Prompt/model değiştirdikten sonra tekrar çalıştır.
+Not: `TestWidgetsFlutterBinding` tüm HTTP'ye 400 döndürdüğü için script
+`HttpOverrides.global = null` yapıyor — normal test paketinde bunu ASLA yapma.
+
+**HÂLÂ ÖLÇÜLMEDİ:** görselli (üretim varsayılanı) yolda cache'in GERÇEKTEN
+sıfır olduğu canlı doğrulanmadı — kod okumasıyla kesin (görsel 0. pozisyonda,
+her sayfada farklı), ama ölçülmedi. Ölçmek için sayfa başına FARKLI bir
+görsel üretmek gerekiyordu, bu script'e eklenmedi.
+
+⚠️ **AŞAĞIDAKİ BEKLENTİ CANLI ÖLÇÜMLE ÇÜRÜTÜLDÜ — bkz. "CANLI ÖLÇÜLDÜ"
+bölümü.** Gerçekleşen tasarruf %38,7 değil **%12,6** (örtük cache ön ekin
+yalnızca ~%37'sini tutuyor). Tarihsel kayıt olarak bırakılıyor:
+~~Beklenen kazanç (cache isabet ederse): tipik sayfa $0,0213 → **$0,0131**
+(−%38,7), 500 sayfa/ay $14,60 → **$10,47** (−%28).~~ Ayrıntı ve reddedilen
 alternatifler (`maxOutputTokens` düşürmek TASARRUF ETMEZ — tavan, bütçe değil;
 sayfa birleştirme kapsam kaybı riski taşır; prompt kısaltmak yanlış yerden
 tasarruf):
