@@ -402,14 +402,18 @@ const Map<String, String> kompaktOncelikKodlari = {
 /// ARRAY.
 ///
 /// `minItems`/`maxItems` BİLEREK YOK (2026-08-04): uzunluğu şemada kilitlemek
-/// sıra kaymasına karşı yapısal bir garanti olurdu, ama Gemini'ın bu iki alanı
-/// nested ARRAY'de kabul ettiği canlı doğrulanamadı (hesabın kredisi tükenmiş)
-/// ve reddedilseydi tüm istekler 400 ile ölürdü. Kullanıcının bilinçli kararı:
-/// canlı testte risk alma. Eleman sayısı yalnızca prompt'ta dayatılıyor (bkz.
-/// [kartEtiketleriKurali] — "hiçbir elemanı atlama, bilmiyorsan null yaz") ve
-/// [flashcardFromCompactItem] kısa/uzun diziyi zaten çökmeden karşılıyor.
-/// Kredi yüklenip biçim canlıda doğrulandıktan sonra ek güvenlik olarak
-/// geri eklenebilir.
+/// sıra kaymasına karşı yapısal bir garanti olurdu, ama o tarihte Gemini'ın bu
+/// iki alanı nested ARRAY'de kabul ettiği canlı doğrulanamamıştı (hesabın
+/// kredisi tükenmişti) ve reddedilseydi tüm istekler 400 ile ölürdü.
+/// Kullanıcının o zamanki bilinçli kararı: canlı testte risk alma. Eleman
+/// sayısı yalnızca prompt'ta dayatılıyor (bkz. [kartEtiketleriKurali] —
+/// "hiçbir elemanı atlama, bilmiyorsan null yaz") ve [flashcardFromCompactItem]
+/// kısa/uzun diziyi zaten çökmeden karşılıyor.
+/// GÜNCELLEME (2026-08-17): temel şema (`type`+`items`+`nullable`, minItems/
+/// maxItems OLMADAN) artık gerçek API çağrılarıyla doğrulandı — bkz. aşağıdaki
+/// not. `minItems`/`maxItems`'ı geri eklemek istersen artık "kredi yok" engeli
+/// yok, doğrudan canlıda denenebilir; henüz denenmedi, bilinçli olarak
+/// eklenmedi.
 ///
 /// NEDEN HEPSİ STRING: Gemini'ın şema alt kümesi heterojen ("tuple") dizi
 /// desteklemiyor — bir ARRAY'in tek bir `items` şeması olabilir, pozisyon
@@ -421,11 +425,14 @@ const Map<String, String> kompaktOncelikKodlari = {
 /// tek `items` şeması olduğundan hepsine uygulanıyor (zararsız — boş gelen
 /// bir pozisyon zaten hoşgörülü karşılanıyor).
 ///
-/// CANLI DOĞRULANMADI (2026-08-04): Gemini hesabının kredisi tükendiği için
-/// (her istek 429 "prepayment credits are depleted") bu şemanın API tarafından
-/// kabul edildiği gerçek bir çağrıyla teyit EDİLEMEDİ. Bu yüzden şema
+/// CANLI DOĞRULANDI (2026-08-17 EKİ, eskiden "CANLI DOĞRULANMADI (2026-08-04)"
+/// diyordu — o not artık YANLIŞ): 2026-08-17'deki `usage_metadata`/context
+/// caching ölçümleri (`tool/measure_cache_test.dart`, bkz. CLAUDE.md "Context
+/// caching") gerçek Gemini API çağrılarıyla yapıldı ve bu şema her seferinde
+/// kabul edildi — reddedilseydi 400 dönerdi ve o ölçümler hiç çıkmazdı. Şema
 /// kasıtlı olarak en sade hâlinde tutuldu (yalnızca `type` + `items` +
-/// `nullable`) — hepsi Gemini'ın en temel şema alanları.
+/// `nullable`) — bu artık "kredi yok, denenemedi" gerekçesiyle değil, kendi
+/// başına bilinçli bir tercih olarak geçerli.
 const Map<String, dynamic> responseSchema = {
   'type': 'ARRAY',
   'items': {
