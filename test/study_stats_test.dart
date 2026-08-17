@@ -166,8 +166,15 @@ void main() {
       ),
     );
 
-    // Metrik kartı: "Günlük seri" etiketi + "2 gün" değeri (ızgara düzenine
-    // geçişte tek satırlık "2 günlük seri" başlığının yerini aldı).
+    // 2026-08-17'den beri bu bölümler varsayılan KAPALI katlanabilir
+    // satırlar (bkz. stats_screen.dart) — içeriklerini görmek için önce
+    // açmak gerekiyor.
+    await tester.tap(find.text('Genel özet'));
+    await tester.tap(find.text('Çalışma takvimi'));
+    await tester.tap(find.text('Konu başarısı'));
+    await tester.pumpAndSettle();
+
+    // Metrik kartı: "Günlük seri" etiketi + "2 gün" değeri.
     expect(find.text('Günlük seri'), findsOneWidget);
     expect(find.text('2 gün'), findsOneWidget);
     expect(find.byType(StudyHeatmap), findsOneWidget);

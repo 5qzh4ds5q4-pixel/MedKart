@@ -84,6 +84,14 @@ Finder _inTodayCard(String text) => find.descendant(
   matching: find.text(text),
 );
 
+/// 4 metrik kartını taşıyan "Genel özet" satırı (2026-08-17'den beri
+/// varsayılan KAPALI bir [ExpansionTile]) — içeriğini görmek için önce
+/// açmak gerekiyor.
+Future<void> _expandGenelOzet(WidgetTester tester) async {
+  await tester.tap(find.text('Genel özet'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -192,6 +200,7 @@ void main() {
       tester,
     ) async {
       await _pumpStats(tester, todayCount: 7);
+      await _expandGenelOzet(tester);
 
       expect(_inTodayCard('Bugün'), findsOneWidget);
       expect(find.text('7 kart'), findsOneWidget);
@@ -204,6 +213,7 @@ void main() {
 
     testWidgets('hedef AYARLI: halka ve yüzde görünür', (tester) async {
       await _pumpStats(tester, todayCount: 5, goal: 20);
+      await _expandGenelOzet(tester);
 
       expect(find.text('5 kart'), findsOneWidget);
       expect(find.byType(DailyGoalRing), findsOneWidget);
@@ -220,6 +230,7 @@ void main() {
       tester,
     ) async {
       await _pumpStats(tester, todayCount: 20, goal: 20);
+      await _expandGenelOzet(tester);
 
       expect(find.text('%100'), findsOneWidget);
       expect(find.text('Günlük hedefini tamamladın 🎉'), findsOneWidget);
@@ -231,6 +242,7 @@ void main() {
       tester,
     ) async {
       await _pumpStats(tester, todayCount: 48, goal: 20);
+      await _expandGenelOzet(tester);
 
       expect(find.text('48 kart'), findsOneWidget);
       expect(find.text('%100'), findsOneWidget);
@@ -242,6 +254,7 @@ void main() {
       tester,
     ) async {
       await _pumpStats(tester, todayCount: 0, goal: 20);
+      await _expandGenelOzet(tester);
 
       expect(find.text('0 kart'), findsOneWidget);
       expect(find.text('%0'), findsOneWidget);
@@ -252,6 +265,7 @@ void main() {
   group('StatsScreen üst 4 metrik kartı', () {
     testWidgets('dördü de etiketleriyle görünür', (tester) async {
       await _pumpStats(tester, todayCount: 3, goal: 10);
+      await _expandGenelOzet(tester);
 
       expect(find.text('Günlük seri'), findsOneWidget);
       expect(find.text('Toplam tekrar'), findsOneWidget);
@@ -283,6 +297,7 @@ void main() {
       tester,
     ) async {
       await _pumpStats(tester, todayCount: 3, goal: 10);
+      await _expandGenelOzet(tester);
 
       expect(find.text('Serini koru, devam et!'), findsNothing);
       expect(find.text('Bugüne kadar çalıştığın kart sayısı.'), findsNothing);
@@ -292,7 +307,7 @@ void main() {
     });
   });
 
-  group('ızgara düzeni — dar ekran', () {
+  group('Genel özet metrik ızgarası — dar ekran', () {
     // Bu testlerin asıl işi TAŞMA (RenderFlex overflow) yakalamak: dar
     // ekranda kartlar yan yana sığmazsa Flutter test sırasında hata atar.
     // "380" genişliği 2026-08-11'den beri "gerçek dar mobil genişlik" +
@@ -301,6 +316,12 @@ void main() {
     // 380 bırakıp sidebar'ı hesaba katmasaydık test aslında 300px içerik
     // genişliğini sınardı (gerçek mobil senaryodan dar), yanlış pozitif
     // taşma yakalardı.
+    //
+    // (2026-08-17 NOT: eskiden burada iki sütunlu bölüm ızgarasının dar
+    // ekranda tek sütuna düştüğünü doğrulayan bir test de vardı — o ızgara
+    // düzeni tamamen kaldırıldı (bkz. stats_screen.dart dosya başı yorumu),
+    // katlanabilir satırlar zaten HER ekran genişliğinde tek sütun/dikey
+    // liste, test edilecek bir "kırılma noktası" kalmadı.)
     testWidgets('mobil genişlikte dört metrik kartı da taşmadan kurulur', (
       tester,
     ) async {
@@ -310,6 +331,7 @@ void main() {
         goal: 20,
         surface: const Size(460, 900),
       );
+      await _expandGenelOzet(tester);
 
       expect(find.byKey(StatsScreen.metricStreakKey), findsOneWidget);
       expect(find.byKey(StatsScreen.metricTotalKey), findsOneWidget);
@@ -326,6 +348,7 @@ void main() {
         todayCount: 5,
         surface: const Size(460, 900),
       );
+      await _expandGenelOzet(tester);
 
       final streak = tester.getTopLeft(
         find.byKey(StatsScreen.metricStreakKey),
@@ -345,6 +368,7 @@ void main() {
 
     testWidgets('geniş ekranda dördü tek satırda yan yana', (tester) async {
       await _pumpStats(tester, todayCount: 5);
+      await _expandGenelOzet(tester);
 
       final streak = tester.getTopLeft(
         find.byKey(StatsScreen.metricStreakKey),
@@ -353,20 +377,6 @@ void main() {
 
       expect(today.dy, streak.dy);
       expect(today.dx, greaterThan(streak.dx));
-    });
-
-    testWidgets('dar ekranda bölümler tek sütuna düşer', (tester) async {
-      await _pumpStats(
-        tester,
-        todayCount: 5,
-        surface: const Size(460, 900),
-      );
-
-      final takvim = tester.getTopLeft(find.text('Çalışma takvimi'));
-      final konu = tester.getTopLeft(find.text('Konu başarısı'));
-
-      // Yan yana değil, alt alta.
-      expect(konu.dy, greaterThan(takvim.dy));
     });
   });
 }

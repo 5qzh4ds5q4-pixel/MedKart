@@ -250,6 +250,11 @@ void main() {
         ],
       );
 
+      // 2026-08-17'den beri varsayılan KAPALI katlanabilir satır — bkz.
+      // stats_screen.dart.
+      await tester.tap(find.text('Deste hazırlığı'));
+      await tester.pumpAndSettle();
+
       expect(find.text('Deste hazırlığı'), findsOneWidget);
       expect(find.text('%75 hazır'), findsOneWidget);
       expect(find.text('3/4 kart'), findsOneWidget);

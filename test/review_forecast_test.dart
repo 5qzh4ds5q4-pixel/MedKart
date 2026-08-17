@@ -207,6 +207,10 @@ void main() {
         _card('bugün', nextReview: DateTime(2026, 8, 6, 20)),
         _card('yarın', nextReview: _inDays(1)),
       ]);
+      // 2026-08-17'den beri varsayılan KAPALI katlanabilir satır — bkz.
+      // stats_screen.dart.
+      await tester.tap(find.text('Önümüzdeki 7 gün'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Önümüzdeki 7 gün'), findsOneWidget);
       expect(find.byType(ReviewForecastChart), findsOneWidget);
@@ -226,6 +230,8 @@ void main() {
       tester,
     ) async {
       await pump(tester, [_card('yeni-1'), _card('yeni-2')]);
+      await tester.tap(find.text('Önümüzdeki 7 gün'));
+      await tester.pumpAndSettle();
 
       expect(find.byType(ReviewForecastChart), findsOneWidget);
       expect(

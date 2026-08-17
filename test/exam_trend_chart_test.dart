@@ -170,6 +170,10 @@ void main() {
         _result('1', takenAt: DateTime(2026, 7, 10), correct: 4, total: 10),
         _result('2', takenAt: DateTime(2026, 7, 12), correct: 7, total: 10),
       ]);
+      // 2026-08-17'den beri varsayılan KAPALI katlanabilir satır — bkz.
+      // stats_screen.dart.
+      await tester.tap(find.text('Deneme sınavı trendi'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Deneme sınavı trendi'), findsOneWidget);
       expect(find.byType(ExamTrendChart), findsOneWidget);

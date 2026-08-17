@@ -54,7 +54,18 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > iki kural ÇAKIŞMIYOR, KAPSAMLARI AYRIK (bkz. "Kart Üretim Kuralları").
 > CANLI ÖLÇÜLMEDİ. Yine de kod
 > değiştikçe eskiyebilir — şüphelendiğin bir iddiayı grep ile hızlıca
-> doğrula ve bu dosyayı güncelle.
+> doğrula ve bu dosyayı güncelle; 2026-08-17'de İstatistik ekranı
+> (`stats_screen.dart`) kullanıcı taslağına göre baştan tasarlandı — 2026-08-04
+> tarihli kart-ızgara düzeni TAMAMEN kaldırıldı, yerine en üstte TEK dominant
+> "bugünkü odak" kartı (`FlashcardStore.weakestTopicInfo`, yeni bir hesap
+> İCAT EDİLMEDİ) + altında varsayılan KAPALI katlanabilir satırlar
+> (`ExpansionTile`) geldi; bu değişiklik `daily_goal_test.dart`,
+> `study_stats_test.dart`, `review_forecast_test.dart`,
+> `exam_trend_chart_test.dart`, `deck_readiness_test.dart` içindeki
+> testleri kırdı (bölüm içerikleri artık satır önce AÇILMADAN görünmüyor) —
+> hepsi satırı açan bir `tester.tap` eklenerek düzeltildi, artı yeni
+> `stats_screen_test.dart` (9 test) eklendi; paket 667/667'den **675/675
+> yeşil**'e çıktı (bkz. "Devam Eden İş" 0.8).
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
@@ -62,8 +73,68 @@ Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
 spaced-repetition çalışma kartı üretir. Hedef kitle: komite sınavına
 hazırlanan tıp fakültesi öğrencileri.
 
-## Devam Eden İş — KALDIĞIMIZ YER (2026-08-12)
+## Devam Eden İş — KALDIĞIMIZ YER (2026-08-17)
 > Yeni oturumda ÖNCE burayı oku. Bitince bu bölümü güncelle/temizle.
+
+### 0.8. İstatistik ekranı — dominant "bugünkü odak" kartı + katlanabilir satırlar (2026-08-17)
+Kullanıcının verdiği bir taslağa göre (`stats_screen.dart` içindeki
+2026-08-04 tarihli kart-ızgara düzeni TAMAMEN retire edildi) ekran baştan
+kuruldu:
+- **En üstte TEK dominant kart** (`_FocusCard`): `FlashcardStore.
+  weakestTopicInfo` (deck_list_screen'deki "En Zayıf Konu Antrenmanı" ile
+  AYNI kaynak — yeni bir hesap İCAT EDİLMEDİ) + aynı konunun `topicStats`
+  içindeki `successPercent`'i (bu da yeni bir hesap değil, var olan listeden
+  okunuyor). "BUGÜN İÇİN" rozeti + "$konu konusuna odaklan" başlık + "%X
+  başarı · Y kart" + "Antrenmana başla" butonu (`requireAuth` ile sarılı,
+  basılınca `StudyScreen(filter: CardFilter(topics: {konu}), ignoreDueDate:
+  true)` açar — deck_list_screen'deki `_LightWeakestTopicCard`'ın AYNI
+  navigasyon deseni). `weakestTopicInfo` null ise (güvenilir veri yok, bkz.
+  `SrsEngine.weakestReliableTopic` eşikleri) `_FocusEmptyCard` düşer: "Çalışmaya
+  başladığında burada görünecek." Ekrandaki TEK amber vurgusu bilerek bu
+  kartta (`colorScheme.primary`); alttaki satırlar nötr.
+- **Altında varsayılan KAPALI katlanabilir satırlar** (`_CollapsibleRow`,
+  ham `ExpansionTile` — `shape`/`collapsedShape` saydam yapılıp KART
+  görünümü BİLEREK engellendi, ayraç `_CollapsibleSectionList` tarafından
+  satırlar ARASINA 0.5px `Divider` olarak ekleniyor): "Genel özet" (eski 4
+  metrik kartı, `_MetricRow`/`_StatCard`/`_TodayCard`/`_CardGrid` İÇERİK
+  olarak DEĞİŞMEDİ), "Çalışma takvimi" (`StudyHeatmap`), "Deste hazırlığı"
+  (`_DeckReadinessBar` listesi, boşsa satır hiç yok), "Deneme sınavı trendi"
+  (`ExamTrendChart`, `ExamTrendChart.shouldShow` false ise satır hiç yok),
+  "Konu başarısı" (`TopicSuccessBar` listesi / `_EmptyTopics`),
+  "Önümüzdeki 7 gün" (`ReviewForecastChart`, kart yoksa satır hiç yok).
+  Kapalıyken görünen özet metni her satırın header'ında (`ExpansionTile.
+  subtitle`) — ör. "2 günlük seri · 164 tekrar", "Son puan %70", "Tüm
+  konular · 9 konu" — hepsi ZATEN hesaplanmış verilerden okunuyor, YENİ bir
+  hesap yok (deneme trendinde "son puan" = `examResults.first.percent`,
+  liste en yeniden en eskiye sıralı olduğu için `.first` = son sınav; deste
+  hazırlığında "en düşük %X" = `deckReadiness.first.readyPercent`, liste
+  zaten en düşük hazırlıktan başlıyor).
+- **BİLİNÇLİ OLARAK EKLENMEDİ — "Bugün İçin Özet" kartı:** kullanıcının
+  isteğinde katlanabilir satırlar arasında sayılmıştı ama bu kart HİÇ
+  kodlanmamıştı (bkz. eski "İstatistik ekranı yeniden tasarımı — FAZ 1
+  BİTTİ, FAZ 2 SÜRÜYOR" notu, "YAPILMADI" listesinin 1. maddesi — bugünkü
+  tekrar yükü/odaklanılacak konu/başlanmamış konu için üç ayrı hesap
+  gerekiyor). "Yeni bir hesap İCAT ETME" talimatıyla DOĞRUDAN çelişeceği
+  için bu satır eklenmedi; ileride istenirse önce o üç hesabın nereden
+  geleceği netleştirilmeli.
+- **Kırılan testler düzeltildi (5 dosya):** `daily_goal_test.dart`
+  (7 test + "dar ekranda bölümler tek sütuna düşer" testi SİLİNDİ — ızgara
+  kavramı retire olunca test edilecek bir "kırılma noktası" kalmadı),
+  `study_stats_test.dart`, `review_forecast_test.dart` (2 test),
+  `exam_trend_chart_test.dart` (1 test), `deck_readiness_test.dart`
+  (1 test) — hepsinde aynı desen: içerik artık `ExpansionTile` altında
+  gizli olduğu için `_pumpStats`'tan sonra ilgili satır başlığına
+  `tester.tap` + `pumpAndSettle` eklendi. **Yeni `test/stats_screen_test.dart`
+  (9 test)**: dominant kart var/yok davranışı, "Antrenmana başla" girişli/
+  girişsiz akışı (`requireAuth`), satırların varsayılan kapalı başlaması,
+  bir satıra dokununca YALNIZCA o satırın açılması, tekrar dokununca
+  kapanması. Paket **667 → 675/675 yeşil**, `flutter analyze` bu dosyalarda
+  **0 yeni uyarı** (proje geneli baseline 90 aynı kaldı).
+- **Tarayıcıda DOĞRULANMADI** — bu oturumda yalnızca `flutter analyze` +
+  `flutter test` ile doğrulandı, gerçek tarayıcıda ekran görüntüsü
+  ALINMADI (Chrome uzantısı bu oturumda bağlı değildi). Sonraki oturumda
+  önce bunu dene — özellikle `_FocusCard`'ın amber kenarlık/gölge/rozet
+  görünümü ve katlanabilir satırların açılış animasyonu göz kararı.
 
 ### 0.7. GLM ve flash-lite — İKİSİ DE REDDEDİLDİ, KONU KAPANDI (2026-08-12)
 **KAPANIŞ NOTU:** Bugün GLM ve flash-lite (`gemini-3.5-flash-lite`) ayrıntılı
