@@ -14,12 +14,11 @@ enum SideNavItem { home, library, quiz, exam, stats, settings }
 /// bilgisi hardcoded `active: true/false` yerine [SideNavItem] enum'una
 /// çevrildi.
 ///
-/// "Ana Sayfa" ve "Destelerim" İKİSİ DE deste listesine gider (ayrı bir
-/// kütüphane ekranı yok, bkz. `DeckListScreen` doc yorumu) — çağıran ekran
-/// deste listesinin KENDİSİYSE [onOpenHome]/[onOpenLibrary] no-op (`() {}`)
-/// verir (dokunma yalnızca dokunsal geri bildirim, eskisi gibi), başka bir
-/// ekrandan çağrılıyorsa deste listesine dönen (`popUntil((r) => r.isFirst)`
-/// gibi) bir callback verilmeli.
+/// "Ana Sayfa" dashboard'a (`DeckListScreen`) döner; "Destelerim" ise
+/// 2026-08-17'den beri AYRI bir ekran açar (`DeckLibraryScreen` — sade deste
+/// listesi). Öncesinde ikisi de aynı şeyi yapıyordu (`popUntil`), ayrı bir
+/// kütüphane ekranı yoktu. Bu widget hangi callback'in ne yaptığını BİLMEZ;
+/// yönlendirme mantığı tek yerde, `AppShell`'de.
 class SideNavBar extends StatelessWidget {
   const SideNavBar({
     super.key,

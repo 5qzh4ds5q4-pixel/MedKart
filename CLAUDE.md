@@ -65,7 +65,12 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > testleri kırdı (bölüm içerikleri artık satır önce AÇILMADAN görünmüyor) —
 > hepsi satırı açan bir `tester.tap` eklenerek düzeltildi, artı yeni
 > `stats_screen_test.dart` (9 test) eklendi; paket 667/667'den **675/675
-> yeşil**'e çıktı (bkz. "Devam Eden İş" 0.8).
+> yeşil**'e çıktı (bkz. "Devam Eden İş" 0.8); aynı oturumun devamında sol
+> sidebar'daki "Destelerim" İLK KEZ kendi ekranını aldı (`DeckLibraryScreen`
+> — sade liste; öncesinde "Ana Sayfa" ile birebir aynı şeyi yapıyordu, iki
+> ikonun ayrı durmasının bir anlamı yoktu) ve deste eylemleri/menüsü
+> `DeckActions` + `DeckActionMenu`'ye çıkarılarak `deck_list_screen.dart`'taki
+> İKİ kopya menü teke indi (675→**684** test).
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.

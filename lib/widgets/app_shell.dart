@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../screens/deck_library_screen.dart';
 import '../screens/exam_sim_screen.dart';
 import '../screens/mcq_setup_screen.dart';
 import '../screens/settings_screen.dart';
@@ -24,11 +25,17 @@ export 'side_nav_bar.dart' show SideNavItem;
 ///
 /// [active] hangi sidebar ikonunun vurgulanacağını VE hangi callback'in
 /// no-op kalacağını belirler (zaten o ekrandaysan tıklama hiçbir şey
-/// yapmaz). "Ana Sayfa"/"Destelerim" HER ZAMAN deste listesine döner
-/// (`Navigator.popUntil((r) => r.isFirst)` — `main.dart`'ın `home:` route'u
-/// hep `DeckListScreen`); deste listesinin KENDİSİNDEN çağrıldığında bu
-/// zaten en üstteki route olduğu için no-op'tur, ayrıca özel bir dal
-/// GEREKMEZ.
+/// yapmaz).
+///
+/// "Ana Sayfa" HER ZAMAN dashboard'a döner (`Navigator.popUntil((r) =>
+/// r.isFirst)` — `main.dart`'ın `home:` route'u hep `DeckListScreen`);
+/// dashboard'ın KENDİSİNDEN çağrıldığında bu zaten en üstteki route olduğu
+/// için no-op'tur, ayrıca özel bir dal GEREKMEZ.
+///
+/// "Destelerim" ise 2026-08-17'den beri AYRI bir ekran açıyor
+/// (`DeckLibraryScreen`, sade deste listesi) — öncesinde "Ana Sayfa" ile
+/// birebir aynı şeyi yapıyordu ve iki ikonun ayrı durmasının bir anlamı
+/// yoktu.
 ///
 /// Deste listesinin BOŞ/karşılama durumu bilinçli olarak bu widget'ı
 /// KULLANMIYOR (`DeckListScreen._EmptyState` dalı) — o ekranın sidebar'ı hiç
@@ -87,7 +94,12 @@ class AppShell extends StatelessWidget {
               SideNavBar(
                 active: active,
                 onOpenHome: () => _goHome(context),
-                onOpenLibrary: () => _goHome(context),
+                onOpenLibrary: () => _openIfNotActive(
+                  context,
+                  SideNavItem.library,
+                  active,
+                  (_) => const DeckLibraryScreen(),
+                ),
                 onOpenQuiz: () => _openIfNotActive(
                   context,
                   SideNavItem.quiz,

@@ -18,7 +18,7 @@ import '../utils/require_auth.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/card_chips.dart';
 import '../widgets/content_shell.dart';
-import '../widgets/deck_name_dialog.dart';
+import '../widgets/deck_action_menu.dart';
 import '../widgets/profile_bubble.dart';
 import 'card_list_screen.dart';
 import 'exam_sim_screen.dart';
@@ -27,90 +27,15 @@ import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'study_screen.dart';
 
-/// Ana ekran: destelerin listesi.
+/// Ana ekran: dashboard (deste ızgarası + kısayollar + günlük çalışma).
+///
+/// NOT: Deste EYLEMLERİ (oluştur/yeniden adlandır/sil/sınav tarihi) artık
+/// burada DEĞİL — 2026-08-17'de `DeckActions`'a (`widgets/deck_action_menu.
+/// dart`) taşındı, çünkü yeni "Destelerim" ekranı (`DeckLibraryScreen`) da
+/// aynı eylemleri sunuyor ve silme onayının metni iki ekranda ayrışmamalı.
+/// Davranış taşınırken HİÇ değişmedi.
 class DeckListScreen extends StatelessWidget {
   const DeckListScreen({super.key});
-
-  Future<void> _createDeck(BuildContext context) async {
-    await requireAuth(
-      context,
-      () async {
-        final name = await DeckNameDialog.show(context);
-        if (name == null || !context.mounted) return;
-
-        final deck = context.read<FlashcardStore>().createDeck(name);
-        if (!context.mounted) return;
-
-        // Yeni deste boş; doğrudan içine girip kart eklemesi kolay olsun.
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => CardListScreen(deckId: deck.id)),
-        );
-      },
-      reason:
-          'Deste oluşturmak için giriş yapman gerekiyor — destelerin ve '
-          'kartların hesabında güvende kalır.',
-    );
-  }
-
-  Future<void> _renameDeck(BuildContext context, Deck deck) async {
-    final name = await DeckNameDialog.show(context, initialName: deck.name);
-    if (name == null || !context.mounted) return;
-
-    context.read<FlashcardStore>().renameDeck(deck.id, name);
-  }
-
-  /// Deste için sınav tarihi seçtirir; sınav tarihinden önce seçilemez.
-  Future<void> _editExamDate(BuildContext context, Deck deck) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      helpText: 'Sınav tarihini seç',
-      initialDate: deck.examDate ?? now.add(const Duration(days: 14)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 730)),
-    );
-    if (picked == null || !context.mounted) return;
-
-    context.read<FlashcardStore>().setDeckExamDate(deck.id, picked);
-  }
-
-  void _clearExamDate(BuildContext context, Deck deck) {
-    context.read<FlashcardStore>().setDeckExamDate(deck.id, null);
-  }
-
-  Future<void> _deleteDeck(BuildContext context, Deck deck) async {
-    final store = context.read<FlashcardStore>();
-    final cardCount = store.cardsIn(deck.id).length;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('"${deck.name}" silinsin mi?'),
-        content: Text(
-          cardCount == 0
-              ? 'Bu deste boş.'
-              : 'Destedeki $cardCount kart ve tüm çalışma ilerlemen kalıcı '
-                    'olarak silinecek. Bu işlem geri alınamaz.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-    store.deleteDeck(deck.id);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +70,7 @@ class DeckListScreen extends StatelessWidget {
           ],
         ),
         body: SafeArea(
-          child: _EmptyState(onCreate: () => _createDeck(context)),
+          child: _EmptyState(onCreate: () => DeckActions.create(context)),
         ),
       );
 
@@ -166,7 +91,7 @@ class DeckListScreen extends StatelessWidget {
       active: SideNavItem.home,
       topBar: const _DashboardTopBar(),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _createDeck(context),
+        onPressed: () => DeckActions.create(context),
         icon: const Icon(Icons.add),
         label: const Text('Yeni Deste'),
       ),
@@ -180,28 +105,32 @@ class DeckListScreen extends StatelessWidget {
           // viewport'un en altında kalsın diye (bkz. o widget'ın yorumu).
           final dashboardBody = Theme.of(context).brightness == Brightness.dark
               ? _DarkDashboardBody(
-                  onCreateDeck: () => _createDeck(context),
+                  onCreateDeck: () => DeckActions.create(context),
                   onOpenDeck: (deck) => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => CardListScreen(deckId: deck.id),
                     ),
                   ),
-                  onRenameDeck: (deck) => _renameDeck(context, deck),
-                  onDeleteDeck: (deck) => _deleteDeck(context, deck),
-                  onSetExamDate: (deck) => _editExamDate(context, deck),
-                  onClearExamDate: (deck) => _clearExamDate(context, deck),
+                  onRenameDeck: (deck) => DeckActions.rename(context, deck),
+                  onDeleteDeck: (deck) => DeckActions.delete(context, deck),
+                  onSetExamDate: (deck) =>
+                      DeckActions.editExamDate(context, deck),
+                  onClearExamDate: (deck) =>
+                      DeckActions.clearExamDate(context, deck),
                 )
               : _LightDashboardBody(
-                  onCreateDeck: () => _createDeck(context),
+                  onCreateDeck: () => DeckActions.create(context),
                   onOpenDeck: (deck) => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => CardListScreen(deckId: deck.id),
                     ),
                   ),
-                  onRenameDeck: (deck) => _renameDeck(context, deck),
-                  onDeleteDeck: (deck) => _deleteDeck(context, deck),
-                  onSetExamDate: (deck) => _editExamDate(context, deck),
-                  onClearExamDate: (deck) => _clearExamDate(context, deck),
+                  onRenameDeck: (deck) => DeckActions.rename(context, deck),
+                  onDeleteDeck: (deck) => DeckActions.delete(context, deck),
+                  onSetExamDate: (deck) =>
+                      DeckActions.editExamDate(context, deck),
+                  onClearExamDate: (deck) =>
+                      DeckActions.clearExamDate(context, deck),
                 );
 
           return Column(
@@ -215,8 +144,6 @@ class DeckListScreen extends StatelessWidget {
     );
   }
 }
-
-enum _DeckAction { rename, delete, setExamDate, clearExamDate }
 
 /// İlk açılış / "henüz deste yok" ekranı — uygulamanın landing/karşılama
 /// anı. Bilinçli olarak uygulamanın açık/koyu tema tercihinden BAĞIMSIZ,
@@ -1567,7 +1494,7 @@ class _DarkCreateDeckCard extends StatelessWidget {
 
 /// Tek bir deste kartı — kategori pili + isim + kart sayısı + ilerleme
 /// çubuğu + meta satırı, BORDER YOK (bkz. `_DarkCard`). Rename/sil/sınav
-/// tarihi menüsü [_DeckAction] üzerinden aynen korunuyor (mevcut `_DeckTile`
+/// tarihi menüsü [DeckActionMenu] üzerinden aynen korunuyor (mevcut `_DeckTile`
 /// ile aynı eylemler), yalnızca küçük bir `more_vert` ikonuna taşındı —
 /// referans tasarımda bu menü yoktu ama işlevi kaldırmak kapsam dışı.
 class _DarkDeckCard extends StatelessWidget {
@@ -1673,60 +1600,13 @@ class _DarkDeckCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<_DeckAction>(
-                tooltip: 'Deste işlemleri',
-                icon: const Icon(
-                  Icons.more_vert,
-                  size: 18,
-                  color: AppTheme.textTertiaryDark,
-                ),
-                padding: EdgeInsets.zero,
-                iconSize: 18,
-                onSelected: (action) => switch (action) {
-                  _DeckAction.rename => onRename(),
-                  _DeckAction.delete => onDelete(),
-                  _DeckAction.setExamDate => onSetExamDate(),
-                  _DeckAction.clearExamDate => onClearExamDate(),
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: _DeckAction.rename,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Yeniden adlandır'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _DeckAction.setExamDate,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.event_outlined),
-                      title: Text(
-                        examDate == null
-                            ? 'Sınav tarihi belirle'
-                            : 'Sınav tarihini değiştir',
-                      ),
-                    ),
-                  ),
-                  if (examDate != null)
-                    const PopupMenuItem(
-                      value: _DeckAction.clearExamDate,
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.event_busy_outlined),
-                        title: Text('Sınav tarihini kaldır'),
-                      ),
-                    ),
-                  const PopupMenuItem(
-                    value: _DeckAction.delete,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.delete_outline),
-                      title: Text('Sil'),
-                    ),
-                  ),
-                ],
+              DeckActionMenu(
+                deck: deck,
+                iconColor: AppTheme.textTertiaryDark,
+                onRename: onRename,
+                onDelete: onDelete,
+                onSetExamDate: onSetExamDate,
+                onClearExamDate: onClearExamDate,
               ),
             ],
           ),
@@ -2943,12 +2823,6 @@ const List<_CategoryColors> _lightCategoryPalette = [
   ), // fuşya
 ];
 
-/// [_DeckTile] eski sınıfıyla aynı biçim — sınav rozeti (bkz.
-/// `_LightDeckCard`) ve testler (`deck_list_screen_test.dart`) bu formatı
-/// birebir bekliyor, değiştirme.
-String _formatExamDate(DateTime d) =>
-    '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
-
 /// Deste kartı (açık mod) — kategori pili + isim + kart sayısı + ilerleme
 /// çubuğu + meta satırı, 1px kenarlıklı beyaz yüzey (bkz. `_LightCard`).
 /// Metin formülleri (meta satırı, sınav rozeti) BİLİNÇLİ olarak eski
@@ -3055,60 +2929,13 @@ class _LightDeckCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<_DeckAction>(
-                tooltip: 'Deste işlemleri',
-                icon: const Icon(
-                  Icons.more_vert,
-                  size: 18,
-                  color: AppTheme.dashboardTextMuted,
-                ),
-                padding: EdgeInsets.zero,
-                iconSize: 18,
-                onSelected: (action) => switch (action) {
-                  _DeckAction.rename => onRename(),
-                  _DeckAction.delete => onDelete(),
-                  _DeckAction.setExamDate => onSetExamDate(),
-                  _DeckAction.clearExamDate => onClearExamDate(),
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: _DeckAction.rename,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Yeniden adlandır'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _DeckAction.setExamDate,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.event_outlined),
-                      title: Text(
-                        examDate == null
-                            ? 'Sınav tarihi belirle'
-                            : 'Sınav tarihini değiştir',
-                      ),
-                    ),
-                  ),
-                  if (examDate != null)
-                    const PopupMenuItem(
-                      value: _DeckAction.clearExamDate,
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.event_busy_outlined),
-                        title: Text('Sınav tarihini kaldır'),
-                      ),
-                    ),
-                  const PopupMenuItem(
-                    value: _DeckAction.delete,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.delete_outline),
-                      title: Text('Sil'),
-                    ),
-                  ),
-                ],
+              DeckActionMenu(
+                deck: deck,
+                iconColor: AppTheme.dashboardTextMuted,
+                onRename: onRename,
+                onDelete: onDelete,
+                onSetExamDate: onSetExamDate,
+                onClearExamDate: onClearExamDate,
               ),
             ],
           ),
@@ -3207,8 +3034,8 @@ class _LightDeckCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     isCramming
-                        ? 'Sınav ${_formatExamDate(examDate)} · yoğun tekrar modu'
-                        : 'Sınav ${_formatExamDate(examDate)}'
+                        ? 'Sınav ${formatExamDate(examDate)} · yoğun tekrar modu'
+                        : 'Sınav ${formatExamDate(examDate)}'
                               '${daysLeft != null && daysLeft >= 0 ? ' · $daysLeft gün kaldı' : ''}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
