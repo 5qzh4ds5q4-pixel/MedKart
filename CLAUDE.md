@@ -99,6 +99,35 @@ hazırlanan tıp fakültesi öğrencileri.
 ## Devam Eden İş — KALDIĞIMIZ YER (2026-08-17)
 > Yeni oturumda ÖNCE burayı oku. Bitince bu bölümü güncelle/temizle.
 
+### 0.9. MALİYET ARAŞTIRMASI — KAPANDI, LAUNCH'I BLOKLAMIYOR (2026-08-17)
+> Bu konuyu tekrar açmadan önce buradaki dört maddeyi oku. Ayrıntılı denetim
+> raporu: [Maliyet Optimizasyonu Denetimi](https://claude.ai/code/artifact/b2242e76-52c9-4277-977e-58f1af8e0d2d)
+> (ölçüm dökümü, çürütülen hipotezler, reddedilen kaldıraçlar).
+
+- **v28 KALDI, v29 (systemInstruction) GERİ ALINDI.** Gemini'ın örtük
+  (implicit) context cache'i **inline görsel taşıyan isteklerde HİÇ devreye
+  girmiyor**. Sorunun kaynağı görselin **KONUMU DEĞİL, VARLIĞI** — bu iki
+  bağımsız canlı ölçümle kanıtlandı (statik bloğu `systemInstruction`'a
+  taşımak da, görseli `contents`'in sonuna almak da cache'i açmadı; dört
+  çağrının hepsinde `cache=YOK`). Dolayısıyla "parça sırasını değiştir" ve
+  "systemInstruction'a taşı" seçeneklerinin İKİSİ DE ÖLÜ. v28 (prompt ön
+  ekinin sabitlenmesi) kodda kaldı ve görselSİZ yolda çalışıyor (%12,6
+  tasarruf), ama o yol üretimin varsayılanı değil.
+- **`pdf_cache` isabet oranı sorgulandı: geçmiş veri %40 gösteriyor AMA
+  ÖRNEKLEM ANLAMSIZ** (yalnızca ~10 lookup, 6 gerçek PDF). Üstelik bayatlık
+  kapısı devreye girdiği için **şu an itibarıyla efektif isabet oranı %0** —
+  6 kaydın 6'sı da v27 eşiğine göre bayat (null×2, v16×2, v23, v24). Kayıtlar
+  PDF'ler yeniden yüklendikçe v28 ile ezilerek tazelenecek. Bu beklenen ve
+  kasıtlı; %40'lık geçmiş oran ŞU AN GEÇERLİ DEĞİL, plan yaparken kullanma.
+- **Açık (explicit) cache denemesi ASKIDA.** Launch sonrasına, gerçek trafik
+  birikince tekrar değerlendirilecek. Şimdi yapmanın anlamı yok: örtük cache
+  multimodal'de hiç çalışmadığına göre açığın çalışacağı garanti değil,
+  ayrıca `ai-proxy` yalnızca `:generateContent`'e proxy'lediği için
+  **denemenin kendisi bile fonksiyon değişikliği + deploy gerektiriyor**.
+- **MALİYET KONUSU LAUNCH'I BLOKLAMIYOR.** Öncelik sırası artık: (1) config
+  doğrulaması, (2) domain + Resend'e kayıt. Maliyet çalışması bu ikisinden
+  SONRA gelir.
+
 ### 0.8. İstatistik ekranı — dominant "bugünkü odak" kartı + katlanabilir satırlar (2026-08-17)
 Kullanıcının verdiği bir taslağa göre (`stats_screen.dart` içindeki
 2026-08-04 tarihli kart-ızgara düzeni TAMAMEN retire edildi) ekran baştan
