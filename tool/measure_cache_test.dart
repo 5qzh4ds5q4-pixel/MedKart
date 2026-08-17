@@ -14,12 +14,16 @@
 // ÇAĞRILAR ARDIŞIK: PdfCardPipeline concurrency: 4 ile paralel çalışıyor,
 // o durumda ilk 4 istek cache dolmadan aynı anda gider. Burada ilk çağrının
 // cache'i doldurup sonrakilerin isabet etmesini görmek istiyoruz.
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medcard/services/flashcard_prompt.dart' as prompt;
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/gemini_transport.dart';
+import 'package:medcard/services/usage_metadata.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Gerçekçi uzunlukta (~1.700-1.900 karakter) sahte slayt metinleri.
@@ -81,6 +85,71 @@ const _sayfalar = <String>[
       'mekanizmalari uzun vadede kalp kasini daha da bozar.',
 ];
 
+// ---------------------------------------------------------------------------
+// Sayfa başına FARKLI, geçerli bir PNG üretici.
+//
+// Görselli yolu ölçmek için her çağrının AYRI bir görsel taşıması ŞART:
+// aynı görseli göndersek ön ek kendiliğinden eşleşir ve ölçüm yanıltıcı olur
+// (üretimde her sayfanın render'ı farklıdır). Küçük ve sentetik — token
+// sayısı gerçek 1024px sayfa render'ını TEMSİL ETMEZ, burada tek amaç
+// "0. pozisyonda her seferinde değişen bir görsel" durumunu yaratmak.
+// ---------------------------------------------------------------------------
+final List<int> _crcTable = List<int>.generate(256, (n) {
+  var c = n;
+  for (var k = 0; k < 8; k++) {
+    c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+  }
+  return c;
+});
+
+int _crc32(List<int> bytes) {
+  var c = 0xFFFFFFFF;
+  for (final b in bytes) {
+    c = _crcTable[(c ^ b) & 0xFF] ^ (c >> 8);
+  }
+  return c ^ 0xFFFFFFFF;
+}
+
+List<int> _be32(int v) => [
+  (v >> 24) & 0xFF,
+  (v >> 16) & 0xFF,
+  (v >> 8) & 0xFF,
+  v & 0xFF,
+];
+
+List<int> _chunk(String tip, List<int> veri) {
+  final tipBytes = ascii.encode(tip);
+  return [
+    ..._be32(veri.length),
+    ...tipBytes,
+    ...veri,
+    ..._be32(_crc32([...tipBytes, ...veri])),
+  ];
+}
+
+/// [tohum]'a göre renkleri değişen, geçerli 16x16 RGB PNG.
+String _pngBase64(int tohum) {
+  const w = 16, h = 16;
+  final ham = <int>[];
+  for (var y = 0; y < h; y++) {
+    ham.add(0); // filtre: none
+    for (var x = 0; x < w; x++) {
+      ham.addAll([
+        (tohum * 73 + x * 15) & 0xFF,
+        (tohum * 151 + y * 9) & 0xFF,
+        (tohum * 199 + x * y) & 0xFF,
+      ]);
+    }
+  }
+  final png = <int>[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    ..._chunk('IHDR', [..._be32(w), ..._be32(h), 8, 2, 0, 0, 0]),
+    ..._chunk('IDAT', ZLibCodec().encode(ham)),
+    ..._chunk('IEND', const []),
+  ];
+  return base64Encode(Uint8List.fromList(png));
+}
+
 void main() {
   // `GeminiTransport.send` -> `DeviceIdService.getOrCreate` SharedPreferences
   // kullanıyor; binding + mock değer olmadan "Binding has not yet been
@@ -137,9 +206,95 @@ void main() {
 
     print('=== NASIL OKUNUR ===');
     print('Yukarıdaki [USAGE s.N] satırlarına bak:');
-    print('  cache=<sayı> (%oran)  -> cache İSABET ETTİ, v28 çalışıyor');
+    print('  cache=<sayı> (%oran)  -> cache İSABET ETTİ');
     print('  cache=YOK             -> isabet yok');
-    print('girdi=<sayı> değerini yerel karakter sayısıyla karşılaştırıp');
-    print('karakter→token oranını kalibre et (varsayımımız 3,7).');
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
+  test('v29 context cache canlı ölçümü (GÖRSELLİ = üretim varsayılanı)', () async {
+    SharedPreferences.setMockInitialValues({});
+    dotenv.loadFromString(envString: File('.env').readAsStringSync());
+
+    final service = GeminiService();
+
+    print('\n=== GÖRSELLİ YOL (her sayfada FARKLI görsel) ===');
+    print('v28\'de bu yolda cache HİÇ çalışmıyordu: görsel contents\'in 0.');
+    print('parçasıydı ve her sayfada değiştiği için ön eki en baştan kırıyordu.');
+    print('v29\'da statik blok systemInstruction\'a taşındı — system instruction');
+    print('prompt\'un ÖN EKİ olduğu için görselden ETKİLENMEMESİ bekleniyor.\n');
+
+    for (var i = 0; i < _sayfalar.length; i++) {
+      final sayfaNo = i + 1;
+      final kartlar = await service.generateForPage(
+        _sayfalar[i],
+        sayfaNo,
+        imageBase64: _pngBase64(sayfaNo), // HER SAYFADA FARKLI
+        imageMimeType: 'image/png',
+      );
+      print('  -> s.$sayfaNo: ${kartlar.length} kart üretildi');
+      print('');
+    }
+
+    print('=== BEKLENTİ ===');
+    print('1. çağrı cache=YOK (dolduruyor), 2-4. çağrılar cache=<sayı>.');
+    print('Eğer 2-4 de cache=YOK ise systemInstruction ön eke girmiyor');
+    print('demektir ve v29 yaklaşımı ÇALIŞMIYOR.');
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
+  // Görselli yolda cache çalışmadığı görülürse SEBEBİNİ ayırt etmek için:
+  // görsel contents'in SONUNA konursa cache açılıyor mu? Açılıyorsa sorun
+  // görselin KONUMU (çözüm: parça sırası). Açılmıyorsa multimodal istekler
+  // örtük cache'e hiç girmiyor demektir (çözüm: yalnızca AÇIK cache).
+  test('TEŞHİS: görsel contents\'in SONUNDA (sıra etkisi izole)', () async {
+    SharedPreferences.setMockInitialValues({});
+    dotenv.loadFromString(envString: File('.env').readAsStringSync());
+
+    final transport = GeminiTransport();
+
+    print('\n=== TEŞHİS: [metin, görsel] sırası ===');
+    for (var i = 0; i < _sayfalar.length; i++) {
+      final sayfaNo = i + 1;
+      final body = jsonEncode({
+        'systemInstruction': {
+          'parts': [
+            {'text': prompt.buildPageSystemInstruction(hasImage: true)},
+          ],
+        },
+        'contents': [
+          {
+            'parts': [
+              // GÖRSEL SONDA — üretimdekinin TERSİ sıra.
+              {'text': prompt.buildPageUserContent(_sayfalar[i], sayfaNo)},
+              {
+                'inlineData': {
+                  'mimeType': 'image/png',
+                  'data': _pngBase64(sayfaNo),
+                },
+              },
+            ],
+          },
+        ],
+        'generationConfig': {
+          'responseMimeType': 'application/json',
+          'responseSchema': prompt.responseSchema,
+          'temperature': 0.4,
+          'maxOutputTokens': GeminiService.maxOutputTokens,
+          'thinkingConfig': {'thinkingBudget': 0},
+        },
+      });
+
+      final response = await transport.send(
+        model: GeminiService.model,
+        body: body,
+      );
+      if (response.statusCode != 200) {
+        print('  s.$sayfaNo HTTP ${response.statusCode}');
+        continue;
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) logUsageMetadata(decoded, 'teshis-s.$sayfaNo');
+    }
+
+    print('\nSONUÇ: cache=<sayı> ise sorun görselin KONUMU (sıra düzeltilebilir).');
+    print('       cache=YOK ise multimodal istekler örtük cache\'e hiç girmiyor.');
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

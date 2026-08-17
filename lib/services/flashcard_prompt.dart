@@ -16,6 +16,11 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
+// v29 (statik bloğun `systemInstruction`'a taşınması) DENENDİ, canlı ölçümde
+// hiçbir kazanç vermediği görüldü ve GERİ ALINDI — gönderilen prompt metni
+// yine v28 ile birebir aynı, o yüzden sürüm de v28'de kaldı. Bölme
+// ([buildPageSystemInstruction]/[buildPageUserContent]) korundu: prompt METNİ
+// değişmiyor, yalnızca cache sınırı kodda görünür hale geldi.
 const String kPromptVersion = 'v28';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
@@ -469,7 +474,26 @@ ${hasMedia ? '$etiketlemeSonHatirlatmasi\n\n' : ''}$kartEtiketleriKurali$notBlog
 /// prompt'un SONUNA, "SAYFA N METNİ:" bloğuna gitmeli — yoksa cache tekrar
 /// kırılır ve sayfa başı maliyet ~%39 artar (bkz. CLAUDE.md "Context
 /// caching").
-String buildPagePrompt(String pageText, int pageNumber, {bool hasImage = false}) {
+String buildPagePrompt(String pageText, int pageNumber, {bool hasImage = false}) =>
+    '${buildPageSystemInstruction(hasImage: hasImage)}\n\n'
+    '${buildPageUserContent(pageText, pageNumber)}';
+
+/// Yol A'nın SAYFAYA GÖRE DEĞİŞMEYEN kural bloğu.
+///
+/// ŞU AN YALNIZCA [buildPagePrompt] TARAFINDAN KULLANILIYOR — üretimde ayrı
+/// bir `systemInstruction` olarak GÖNDERİLMİYOR. Bu denendi (v29) ve canlı
+/// ölçümle geri alındı: görselli (üretim varsayılanı) yolda cache'i AÇMADI,
+/// dört ardışık çağrının hepsinde `cache=YOK` çıktı. Bkz. `gemini_service.dart`
+/// `generateForPage` içindeki yorum ve CLAUDE.md "Context caching".
+///
+/// BÖLME YİNE DE KORUNDU çünkü cache sınırını KODDA GÖRÜNÜR kılıyor ve
+/// [test/page_prompt_split_test.dart] bu sınırı bir değişmez olarak koruyor:
+/// **buraya sayfaya göre DEĞİŞEN hiçbir şey yazma** (sayfa numarası, dosya
+/// adı, tarih, kimlik, rastgele id...). Değişken her şey
+/// [buildPageUserContent]'e gider. Bu kuralın ihlali görselsiz yoldaki
+/// cache'i de kapatır — v27'de tam olarak bu olmuştu (açılış cümlesindeki
+/// sayfa numarası ön eki 134. karakterde kırıyordu).
+String buildPageSystemInstruction({bool hasImage = false}) {
   final goruntuBlogu = hasImage ? '\n\n$metinVeGorselBirlikteKurali' : '';
   return '''
 Sen tıp fakültesinde sınav sorusu hazırlayan deneyimli bir eğitmensin. Aşağıda bir ders slaytının TEK BİR SAYFASININ metni var. SADECE bu sayfadaki bilgiden sınav odaklı flashcard üret.
@@ -524,14 +548,19 @@ HER KART İÇİN:
 - Soru ve cevabı (2-4 cümle, gerekçesini de ver) Türkçe yaz. $cevapSadeligiKurali
 ${hasImage ? '$etiketlemeSonHatirlatmasi\n\n' : ''}$kartEtiketleriKurali
 
-Bu sayfadan sayfanın içerdiği bilgi miktarına göre kart üret (sınav tipi kartlar dahil, her klinik ilişki için ayrı sayılır); basit bir sayfa 2-3 kart yeterli olabilir, yoğun tablo/liste veya çok sayıda klinik ilişki içeren bir sayfa 25 karta kadar çıkabilir — bir üst sınır olarak düşünme, sayfadaki her ayrı ilişkiyi kapsamak öncelik. Sadece kapsamı doldurmak için tekrar/şişirme kart üretme.
+Bu sayfadan sayfanın içerdiği bilgi miktarına göre kart üret (sınav tipi kartlar dahil, her klinik ilişki için ayrı sayılır); basit bir sayfa 2-3 kart yeterli olabilir, yoğun tablo/liste veya çok sayıda klinik ilişki içeren bir sayfa 25 karta kadar çıkabilir — bir üst sınır olarak düşünme, sayfadaki her ayrı ilişkiyi kapsamak öncelik. Sadece kapsamı doldurmak için tekrar/şişirme kart üretme.''';
+}
 
+/// Yol A'nın SAYFAYA ÖZEL kuyruğu — Gemini'ye `contents` içinde, görselden
+/// SONRA gider. Sayfaya göre değişen TEK yer burasıdır; yeni bir değişken
+/// eklemen gerekiyorsa buraya ekle, [buildPageSystemInstruction]'a DEĞİL
+/// (bkz. oradaki doc yorumu).
+String buildPageUserContent(String pageText, int pageNumber) => '''
 SAYFA $pageNumber METNİ:
 """
 $pageText
 """
 ''';
-}
 
 /// Sağlayıcıdan bağımsız olarak, çözülmüş tek bir kart öğesini [Flashcard]'a
 /// çevirir. Öğe KOMPAKT DİZİ ise [flashcardFromCompactItem]'a devreder (güncel

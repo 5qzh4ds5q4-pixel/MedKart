@@ -178,12 +178,23 @@ class GeminiService implements FlashcardGenerator {
       return const [];
     }
 
+    // TEK `text` PARÇASI — `systemInstruction` DENENDİ VE GERİ ALINDI
+    // (2026-08-17, canlı ölçüm). Statik kural bloğunu `systemInstruction`'a
+    // taşımak, görselli (üretim varsayılanı) yolda cache'i AÇMADI: dört
+    // ardışık çağrının hepsinde `cache=YOK` ölçüldü. Ardından görsel
+    // `contents`'in SONUNA alınarak sıra etkisi de izole edildi — o da
+    // açmadı. Sonuç: inline görsel taşıyan istekler Gemini'ın ÖRTÜK
+    // cache'ine hiç girmiyor; sorun görselin KONUMU değil VARLIĞI.
+    // Ölçülebilir faydası olmayan ama kart kalitesini etkileyebilecek
+    // (kurallar user turn yerine system instruction'a taşınıyordu) bir
+    // değişikliği tutmanın anlamı yok. Gönderilen prompt metni v28 ile
+    // BİREBİR AYNI. Ayrıntı: CLAUDE.md "Context caching".
     final parts = <Map<String, dynamic>>[
       if (hasImage)
         {
           'inlineData': {'mimeType': imageMimeType, 'data': imageBase64},
         },
-      {'text': _buildPagePrompt(text, sourcePage, hasImage: hasImage)},
+      {'text': prompt.buildPagePrompt(text, sourcePage, hasImage: hasImage)},
     ];
 
     final body = jsonEncode({
@@ -221,11 +232,6 @@ class GeminiService implements FlashcardGenerator {
     return _parsePageCards(response.body, sourcePage);
   }
 
-  String _buildPagePrompt(
-    String pageText,
-    int pageNumber, {
-    bool hasImage = false,
-  }) => prompt.buildPagePrompt(pageText, pageNumber, hasImage: hasImage);
 
   /// Sayfa yanıtını hoşgörülü ayrıştırır: sorun olursa (boş/bozuk/güvenlik)
   /// hata fırlatmak yerine boş liste döner — o sayfa yalnızca kart üretmemiş

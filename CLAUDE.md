@@ -1590,27 +1590,11 @@ v28 yine de DOĞRU ve gerekli: görsel sırası düzeltildiği anda kazanç
 kendiliğinden gelsin diye ÖN KOŞUL olarak duruyor, ayrıca görselsiz yolu
 bugünden ucuzlatıyor.
 
-**Sıradaki adım — İKİ seçenek var, ikisi de ölçüm ister:**
-- **(A) Parça sırasını değiştir:** `[text(statik kurallar)] →
-  [inlineData(görsel)] → [text(sayfa metni)]`. `generate()`'teki "Gemini
-  önerisi: medya parçaları önce, yönerge metni sonra" yorumuna kısmen ters.
-- **(B) Statik bloğu `systemInstruction`'a taşı** — muhtemelen DAHA İYİ
-  seçenek: system instruction prompt'un ÖN EKİNİN parçasıdır (Google dokümanı:
-  "cached content is a prefix to the prompt"), yani statik blok token
-  dizisinin en başına geçer ve `contents.parts` **`[görsel, sayfa metni]`
-  olarak AYNEN KALABİLİR** — yani "medya önce, yönerge sonra" konvansiyonu
-  HİÇ BOZULMAZ. Bugün bu alan hiç kullanılmıyor, eklemek yeni bir yetenek
-  değil sadece metnin yerini değiştirmek.
-  Bilinen risk: system instruction'a taşınan metin modelce farklı
-  ağırlıklandırılabilir; ayrıca uzun ortak ön eklerde (>9k token) örtük
-  cache'in tutarsız isabet ettiğine dair bildirilmiş bir sorun var
-  (googleapis/python-genai #1880) — bizim ön ek ~6,1k, altında ama sınıra
-  yakın.
-
-İKİSİ DE **canlı A/B ölçülmeden yapılmamalı** (kullanıcı açıkça "riskli olanı
-yapma" dedi). Artık ölçüm altyapısı VAR (aşağı bkz.) — A/B için gereken tek
-şey aynı PDF'i iki kurulumla işleyip `[USAGE ...]` satırlarındaki `cache=`
-oranını ve kart kalitesini karşılaştırmak.
+**Sıradaki adım olarak İKİ seçenek düşünülmüştü — İKİSİ DE DENENDİ VE
+BAŞARISIZ OLDU, aşağıdaki "GÖRSELLİ YOLDA CACHE HİÇ ÇALIŞMIYOR" bölümüne bak.
+(A) parça sırasını değiştirmek ve (B) statik bloğu `systemInstruction`'a
+taşımak; ikisi de görselli yolda cache'i açmadı. Tekrar denemeden önce neyin
+FARKLI olacağını netleştir.**
 
 ### Ölçüm altyapısı — `usage_metadata.dart` (2026-08-17, EKLENDİ)
 Bu tarihe kadar kod tabanında **hiçbir yerde token sayımı tutulmuyordu**
@@ -1682,13 +1666,52 @@ TAHMİNDİ.** Düzeltilmiş statik blok boyutları:
   = **$0,018575**
 - tasarruf **$0,00268/sayfa = %12,6** (rapordaki vaat: %38,7)
 
-**SONUÇ — stratejik yön DEĞİŞTİ:** örtük cache az veriyor. Asıl kazanç artık
-**AÇIK (explicit) cache**'te: `CachedContent` kaydı oluşturulursa ön ekin
-TAMAMI (görselli yolda ~7.386 token) güvenilir biçimde önbelleklenir →
-sayfa başı ~$0,00997 tasarruf (%40 mertebesi). Bedeli: token-saat depolama
-ücreti + `ai-proxy`'de cache kaydını oluşturup adını payload'a koyan bir
-yönetim katmanı. Statik blok TÜM kullanıcılar ve TÜM PDF'ler için aynı
-olduğundan tek bir kayıt herkese hizmet edebilir.
+### 🔴 GÖRSELLİ YOLDA CACHE HİÇ ÇALIŞMIYOR — İKİ ÇÖZÜM DENENDİ, İKİSİ DE BAŞARISIZ
+Aynı gün, görselli (üretim varsayılanı) yolu açmak için iki yapısal değişiklik
+denendi ve **ikisi de canlı ölçümle çürütüldü.** Ölçüm: sayfa başına FARKLI
+sentetik PNG üretilerek üretim koşulu birebir taklit edildi.
+
+**Deneme 1 — statik bloğu `systemInstruction`'a taşı (v29):** Gerekçe, Google
+dokümanındaki "cached content is a prefix to the prompt" ifadesiydi; system
+instruction ön ekin parçası olduğu için görselden etkilenmemesi bekleniyordu.
+```
+[USAGE s.1] girdi=8775 cache=YOK   [USAGE s.3] girdi=8711 cache=YOK
+[USAGE s.2] girdi=8728 cache=YOK   [USAGE s.4] girdi=8714 cache=YOK
+```
+Dördü de `cache=YOK`. **ÇALIŞMADI.**
+
+**Deneme 2 (teşhis) — görseli `contents`'in SONUNA al:** sorunun görselin
+KONUMU mu VARLIĞI mı olduğunu ayırt etmek için. Dördü de yine `cache=YOK`.
+
+**KESİN SONUÇ: sorun görselin KONUMU DEĞİL, VARLIĞI.** Inline görsel taşıyan
+istekler Gemini'ın örtük cache'ine hiç girmiyor. Bu, "parça sırasını değiştir"
+(A) ve "systemInstruction'a taşı" (B) seçeneklerinin İKİSİNİ DE öldürüyor —
+bir daha denemeden önce neyin FARKLI olacağını netleştir.
+
+**v29 GERİ ALINDI.** Ölçülebilir faydası olmayan ama kart kalitesini
+etkileyebilecek (kurallar user turn yerine system instruction'a taşınıyordu)
+bir değişikliği tutmanın anlamı yoktu. `kPromptVersion` v28'de kaldı —
+gönderilen prompt metni v28 ile BİREBİR AYNI. **Bölme
+(`buildPageSystemInstruction`/`buildPageUserContent`) KORUNDU**: prompt metnini
+değiştirmiyor, yalnızca cache sınırını kodda görünür kılıyor ve
+`test/page_prompt_split_test.dart` (10 test) bu sınırı değişmez olarak
+koruyor.
+
+**GERİYE KALAN DURUM:**
+- Görselsiz yol: cache çalışıyor (~%35 girdi, ~%12,6 tasarruf). Ama bu
+  üretimin varsayılanı DEĞİL ve el yazısı yakalamayı kaybettiği için
+  varsayılan yapılamaz.
+- Görselli yol (varsayılan): örtük cache ile hiçbir kazanç MÜMKÜN DEĞİL.
+- **Açık (explicit) cache** hâlâ denenmedi ve artık daha BELİRSİZ: örtük cache
+  multimodal isteklerde hiç devreye girmediğine göre açık cache'in gireceği de
+  garanti değil. Ayrıca `ai-proxy` yalnızca `:generateContent` uç noktasına
+  proxy'liyor; `cachedContents` kaydı oluşturmak için **fonksiyonu değiştirip
+  DEPLOY etmek** gerekiyor — yani denemenin kendisi bile üretime dokunmayı
+  gerektiriyor. Karar kullanıcıya bırakıldı.
+- **En iyi kalan kaldıraç artık `pdf_cache`** (bkz. "Maliyet Optimizasyonu"):
+  isabet ettiğinde maliyet TAM SIFIR, kalite etkisi YOK (birebir aynı kartlar),
+  altyapı zaten mevcut ve `hit_count` sayacı zaten var — gerçek isabet oranı
+  bugüne kadar hiç sorgulanmadı.
 
 **ÖLÇÜM TEKRARLANABİLİR:** `tool/measure_cache_test.dart` (pakete dahil
 DEĞİL, `tool/` altında). Prompt/model değiştirdikten sonra tekrar çalıştır.
