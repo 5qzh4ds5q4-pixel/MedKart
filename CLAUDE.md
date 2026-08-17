@@ -65,12 +65,30 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > testleri kırdı (bölüm içerikleri artık satır önce AÇILMADAN görünmüyor) —
 > hepsi satırı açan bir `tester.tap` eklenerek düzeltildi, artı yeni
 > `stats_screen_test.dart` (9 test) eklendi; paket 667/667'den **675/675
-> yeşil**'e çıktı (bkz. "Devam Eden İş" 0.8); aynı oturumun devamında sol
-> sidebar'daki "Destelerim" İLK KEZ kendi ekranını aldı (`DeckLibraryScreen`
-> — sade liste; öncesinde "Ana Sayfa" ile birebir aynı şeyi yapıyordu, iki
-> ikonun ayrı durmasının bir anlamı yoktu) ve deste eylemleri/menüsü
-> `DeckActions` + `DeckActionMenu`'ye çıkarılarak `deck_list_screen.dart`'taki
-> İKİ kopya menü teke indi (675→**684** test).
+> yeşil**'e çıktı (bkz. "Devam Eden İş" 0.8); aynı günün ilerleyen
+> saatlerinde (ayrı bir görev) kod tabanındaki gerçek parametreler
+> (model/fiyat/`maxOutputTokens`/`thinkingBudget`/prompt uzunlukları —
+> prompt uzunlukları geçici bir `dart run` script'iyle GERÇEKTEN ÖLÇÜLDÜ,
+> tahmin edilmedi) üzerinden kapsamlı bir Gemini maliyet mühendisliği
+> raporu çıkarıldı; hiçbir gerçek API çağrısı yapılmadı, ayrıntı ve tüm
+> ara hesaplar "Maliyet" bölümündeki yeni alt başlıkta. Aynı oturumun
+> devamında (1) sol sidebar'daki "Destelerim" ilk kez KENDİ ekranını aldı
+> (`DeckLibraryScreen` — sade liste; öncesinde "Ana Sayfa" ile birebir aynı
+> şeyi yapıyordu) ve deste eylemleri/menüsü `DeckActions`+`DeckActionMenu`'ye
+> çıkarılarak `deck_list_screen.dart`'taki İKİ kopya menü teke indi
+> (675→684 test); (2) maliyet raporunun devamı olarak bir düşürme planı
+> çıkarıldı ve **tek risksiz maddesi UYGULANDI** — `buildPagePrompt`'un
+> açılış cümlesindeki `(sayfa $pageNumber)` kaldırılarak prompt ön eki
+> 134 karakterden 22.575 karaktere çıkarıldı (Gemini örtük context cache
+> eşiği: 4.096 token), `kPromptVersion` v27→**v28**; aynı anda
+> `usage_metadata.dart` eklenerek token/cache ölçümü İLK KEZ mümkün oldu
+> (kullanıcının talimatı: "loglamayı 1. adımdan ayırma, yoksa kör
+> optimizasyon olur"). Ardından kod okumasıyla DOĞRULANDI ki **v28 tek
+> başına üretimdeki varsayılan (görselli) akışta cache'i AÇMIYOR** — görsel
+> parçası 0. pozisyonda ve her sayfada değişiyor; görsel sırası BİLİNÇLİ
+> OLARAK değiştirilmedi (canlı A/B ister). Bkz. "Context caching" bölümü;
+> test 675→**695**, `flutter analyze` baseline 90→**92** (yalnızca yeni
+> dosyadaki `avoid_print`).
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
@@ -1511,7 +1529,183 @@ asla sabit kodlama — `Theme.of(context).colorScheme.*`/`textTheme.*` kullan.
 - Görsel token sabit (~1092/sayfa, JPEG 1024px, içerikten bağımsız)
 - NOT: Bu ölçüm `shortAnswer` alanı eklenmeden ÖNCE yapıldı (2026-07-18);
   her kartta ekstra bir alan üretildiği için gerçek maliyet şu an muhtemelen
-  bu rakamdan biraz yüksek — henüz shortAnswer sonrası yeniden ölçülmedi.
+  bu rakamdan biraz yüksek — henüz shortAnswer sonrası CANLI yeniden
+  ölçülmedi (aşağıdaki 2026-08-17 raporu kod-türetilmiş bir TAHMİN,
+  canlı ölçüm değil).
+
+## Context caching — prompt ön eki SABİT KALMALI (2026-08-17, v28)
+> **YENİ BİR ŞEY EKLEMEDEN ÖNCE OKU.** `buildPagePrompt`'un başına sayfaya
+> göre DEĞİŞEN bir şey koymak sayfa başı maliyeti ~%39 artırır.
+
+Gemini 3.5 Flash tekrar eden prompt ÖN EKİNE **%90 indirim** uygular (örtük/
+implicit context caching, 2.5+ modellerde VARSAYILAN AÇIK, depolama ücreti
+yok). Koşul: iki isteğin **baştan itibaren birebir aynı** olması ve ortak ön
+ekin **4.096 token**'ı (3.5 Flash için asgari) aşması.
+
+**BULUNAN SORUN (2026-08-17, ölçüldü):** `buildPagePrompt`'un açılış cümlesi
+`... TEK BİR SAYFASININ metni var (sayfa $pageNumber). ...` diyordu — yani
+prompt daha **134. karakterde** değişkenleşiyordu. Aynı PDF'in iki sayfası
+arasındaki ortak ön ek **~36 token**'dı, eşiğin çok altında: **cache HİÇ
+devreye girmiyordu** ve ~6.100 token'lık statik kural bloğu her sayfada tam
+fiyattan yeniden faturalanıyordu (tipik sayfa girdi token'ının **%79'u**).
+
+**YAPILAN (v27→v28):** `(sayfa $pageNumber)` açılış cümlesinden KALDIRILDI.
+Bilgi kaybı YOK — numara zaten prompt'un SONUNDAKİ `SAYFA N METNİ:` bloğunda
+duruyor ve `flashcardFromItem`/pipeline onu oradan değil, çağıranın verdiği
+`sourcePage` argümanından alıyor; baştaki tekrar modele ek bilgi VERMİYORDU.
+Ölçüm (gerçek fonksiyon iki farklı sayfa için çalıştırılıp karakter karakter
+karşılaştırıldı):
+
+| Yol | ÖNCE (v27) | SONRA (v28) | Eşik (4.096 tkn) |
+|---|---|---|---|
+| Yol A görselli | 134 krkt (~36 tkn) | **22.575 krkt (~6.101 tkn)** | ✓ aşıyor |
+| Yol A görselsiz | 134 krkt (~36 tkn) | **16.569 krkt (~4.478 tkn)** | ✓ aşıyor |
+
+**KURAL:** `buildPagePrompt`'un GÖVDESİNE (yani `SAYFA N METNİ:` bloğundan
+ÖNCEKİ her yere) sayfaya/isteğe göre değişen HİÇBİR ŞEY yazma — sayfa
+numarası, dosya adı, tarih, kullanıcı/cihaz kimliği, rastgele id, deste adı...
+Değişken her şey prompt'un SONUNA gitmeli. Fonksiyonun doc yorumunda da bu
+uyarı var; oradan silme.
+
+### ⚠️ v28 TEK BAŞINA ÜRETİMDE HİÇBİR ŞEY KAZANDIRMIYOR (kod okunarak DOĞRULANDI)
+Aynı oturumda uçtan uca kod okumasıyla doğrulandı — **v28 düzeltmesi
+üretimdeki VARSAYILAN akışta cache'i AÇMIYOR.** Zincir:
+1. `add_cards_screen.dart:43` → `bool _hasHandwriting = true` — el yazısı
+   anahtarının VARSAYILANI AÇIK, yani üretimde baskın yol görselli yol.
+2. `gemini_service.dart` `generateForPage` parçaları
+   `[inlineData(görsel), text(prompt)]` sırasıyla kuruyor — **görsel 0.
+   POZİSYONDA** ve her sayfada FARKLI.
+3. `gemini_transport.dart` gövdeyi olduğu gibi `payload`'a koyuyor;
+   `ai-proxy/index.ts:101` de `JSON.stringify(payload)` ile **birebir**
+   Gemini'ye iletiyor (hiçbir yeniden yapılandırma yok).
+4. `systemInstruction` alanı kod tabanında **HİÇ KULLANILMIYOR** (grep'lendi).
+
+Sonuç: token dizisinin en başında her sayfada değişen bir görsel duruyor,
+dolayısıyla ortak ön ek ~0. Arkasındaki 22.575 karakterlik statik blok ne
+kadar sabit olursa olsun cache'e giremiyor. **v28'in fiili kazancı şu an
+YALNIZCA el yazısı anahtarı KAPALI çalıştırmalarda** (orada hiç görsel parçası
+yok, prompt tek `text` parçası → ön ek ~4.478 token, eşiği aşıyor).
+
+v28 yine de DOĞRU ve gerekli: görsel sırası düzeltildiği anda kazanç
+kendiliğinden gelsin diye ÖN KOŞUL olarak duruyor, ayrıca görselsiz yolu
+bugünden ucuzlatıyor.
+
+**Sıradaki adım — İKİ seçenek var, ikisi de ölçüm ister:**
+- **(A) Parça sırasını değiştir:** `[text(statik kurallar)] →
+  [inlineData(görsel)] → [text(sayfa metni)]`. `generate()`'teki "Gemini
+  önerisi: medya parçaları önce, yönerge metni sonra" yorumuna kısmen ters.
+- **(B) Statik bloğu `systemInstruction`'a taşı** — muhtemelen DAHA İYİ
+  seçenek: system instruction prompt'un ÖN EKİNİN parçasıdır (Google dokümanı:
+  "cached content is a prefix to the prompt"), yani statik blok token
+  dizisinin en başına geçer ve `contents.parts` **`[görsel, sayfa metni]`
+  olarak AYNEN KALABİLİR** — yani "medya önce, yönerge sonra" konvansiyonu
+  HİÇ BOZULMAZ. Bugün bu alan hiç kullanılmıyor, eklemek yeni bir yetenek
+  değil sadece metnin yerini değiştirmek.
+  Bilinen risk: system instruction'a taşınan metin modelce farklı
+  ağırlıklandırılabilir; ayrıca uzun ortak ön eklerde (>9k token) örtük
+  cache'in tutarsız isabet ettiğine dair bildirilmiş bir sorun var
+  (googleapis/python-genai #1880) — bizim ön ek ~6,1k, altında ama sınıra
+  yakın.
+
+İKİSİ DE **canlı A/B ölçülmeden yapılmamalı** (kullanıcı açıkça "riskli olanı
+yapma" dedi). Artık ölçüm altyapısı VAR (aşağı bkz.) — A/B için gereken tek
+şey aynı PDF'i iki kurulumla işleyip `[USAGE ...]` satırlarındaki `cache=`
+oranını ve kart kalitesini karşılaştırmak.
+
+### Ölçüm altyapısı — `usage_metadata.dart` (2026-08-17, EKLENDİ)
+Bu tarihe kadar kod tabanında **hiçbir yerde token sayımı tutulmuyordu**
+(`GeminiService` yanıttan yalnızca `candidates` okuyup `usageMetadata`'yı
+atıyordu, `ai-proxy` loglamıyordu, `kullanim_kota` token değil SAYFA sayıyor).
+Bu yüzden tüm maliyet analizleri karakter→token TAHMİNİNE dayanmak zorundaydı
+ve v28'in etkisi ölçülemezdi — yani "kör optimizasyon" riski vardı. Kullanıcının
+açık talimatıyla v28 ile **AYNI ANDA** eklendi:
+- `lib/services/usage_metadata.dart`: `UsageMetadata.tryParse` (savunmacı —
+  blok yoksa/bozuksa null döner, ASLA fırlatmaz) + `cacheHitPercent` +
+  `logUsageMetadata`. Fiyat/dolar hesabı BİLİNÇLİ OLARAK YOK — birim fiyatı
+  koda gömmek bu depodaki diğer sabit rakamların başına gelen "sessizce eskime"
+  sorununu davet ederdi; yalnızca ölçülen token sayıları ve cache ORANI loglanır.
+- Çağrı noktaları: `_parsePageCards` (Yol A, etiket `s.N`) ve `_parseResponse`
+  (Yol B, etiket `yol-B`). İkisinde de **candidates kontrollerinden ÖNCE**
+  çağrılıyor — kart ayrıştırma başarısız olsa bile istek faturalandığı için
+  ölçüm kaybolmamalı.
+- Log satırı: `[USAGE s.12] girdi=7688 cache=6101 (%79) çıktı=1080 toplam=8768`.
+  Cache isabet etmediyse `cache=YOK` yazar (sessiz kalmıyor — "ölçüm var"
+  yanılgısı olmasın diye). `thinkingBudget: 0` olmasına rağmen thinking tokenı
+  gelirse `thinking=N(!)` diye dikkat çeker.
+- **NEREDE GÖRÜNÜR:** Flutter web'de `print()` sunucu log'una DEĞİL TARAYICI
+  KONSOLUNA gider (bkz. "ortam notları") — `flutter run` çıktısında arama,
+  DevTools konsolunda ara. Daha kalıcı bir çözüm istenirse `ai-proxy`'de
+  sunucu tarafında loglamak gerekir (yapılmadı).
+- Test: `test/usage_metadata_test.dart` (11 test — eksik/bozuk blok, sıfıra
+  bölme, oran hesabı, log biçimi).
+- **`flutter analyze` baseline 90 → 92:** iki yeni uyarı bu dosyadaki
+  `avoid_print`'ten geliyor. `ignore` yorumu EKLENMEDİ — `gemini_service.dart`
+  zaten 30'dan fazla aynı tarz tanılama `print`'i taşıyor ve hiçbirinde ignore
+  yok; yalnızca burada susturmak tutarsız olurdu. Yeni bir regresyon DEĞİL.
+
+**v28'in gerçek etkisi HÂLÂ ÖLÇÜLMEDİ** — altyapı hazır ama canlı bir PDF
+çalıştırması yapılmadı. Yukarıdaki tüm token rakamları hâlâ karakter→token
+tahminidir (3,7 krkt/token). İlk gerçek çalıştırmada `[USAGE ...]` satırlarına
+bakıp bu tahmini kalibre et.
+
+Beklenen kazanç (cache isabet ederse): tipik sayfa $0,0213 → **$0,0131**
+(−%38,7), 500 sayfa/ay $14,60 → **$10,47** (−%28). Ayrıntı ve reddedilen
+alternatifler (`maxOutputTokens` düşürmek TASARRUF ETMEZ — tavan, bütçe değil;
+sayfa birleştirme kapsam kaybı riski taşır; prompt kısaltmak yanlış yerden
+tasarruf):
+[Maliyet Düşürme Planı](https://claude.ai/code/artifact/bcf3494c-03ec-4b2c-99bc-f6dd536a49a8).
+
+**YAN FAYDA:** cache isabet ettiğinde statik blok 10 kat ucuzluyor, yani
+prompt'a yeni kalite kuralı eklemenin maliyeti ~$0,0018'den ~$0,0002'ye
+düşüyor — v22→v27 büyümesinin kompakt JSON tasarrufunu yeme sorunu
+(aşağıdaki rapora bkz.) pratikte ortadan kalkıyor.
+
+**Gemini maliyet mühendislik raporu (2026-08-17, koddan TÜRETİLMİŞ hesap —
+CANLI ÖLÇÜM DEĞİL):** `shortAnswer` ve v27 prompt büyümesi sonrası sayfa
+başı maliyeti güncellemek için kod tabanındaki gerçek parametreler
+(model/fiyat/`maxOutputTokens`/prompt uzunlukları) üzerinden kapsamlı bir
+hesap çıkarıldı. Prompt uzunlukları geçici bir `dart run` script'iyle
+GERÇEKTEN ÖLÇÜLDÜ (v27 güncel + git geçmişindeki v22/v25 durumları da
+worktree'de checkout edilip aynı şekilde ölçüldü); fiyat ($1,50/$9,00 per
+M token, girdi/çıktı) ve USD/TRY (~47,90) web'den doğrulandı. Sayfa
+içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
+(3,7 kr/token) TAHMİN — ayrıntı için tam rapora bkz.:
+[MedKart Maliyet Raporu](https://claude.ai/code/artifact/77bb27f7-b781-481f-a6c4-6d398acd4bdd).
+Özet:
+- Sayfa başı (Yol A, görsel açık — varsayılan): tipik sayfa (6 kart)
+  **$0,0213**, yoğun/tablo sayfa (22 kart) **$0,0476**, teorik tavan
+  (4096 çıktı token dolu) **$0,0488** — bu sonuncusu kodun kendi
+  yorumundaki (`gemini_service.dart:88`) "~$0,048/sayfa" tahminiyle
+  neredeyse birebir örtüştü, modelin tutarlılığı için iyi bir çapraz
+  doğrulama.
+- Yukarıdaki eski $0.019/sayfa rakamı `shortAnswer` öncesi VE daha kısa
+  (v22 öncesi) prompt ile ölçülmüştü; bugünkü tipik-sayfa rakamı
+  ($0,0213) ona yakın ama biraz yüksek — iki ölçüm tutarlı yönde.
+- Vision (görsel eki) payı sayfa yoğunluğuna göre değişiyor: tipik
+  sayfada **%19,2**, yoğun sayfada **%8,6** — ve tipik sayfadaki bu payın
+  yarıdan fazlası (11,5 puan / 19,2 puan) aslında 1.092 sabit görsel
+  tokeninden değil, görsel açıkken devreye giren EKSTRA PROMPT
+  KURALLARINDAN (el yazısı ayrımı, slayt numarası vb.) geliyor.
+- Prompt büyümesi (v22→v27, +4.412 karakter/%24,3) vs kompakt JSON
+  formatının çıktı tasarrufu: tipik sayfada neredeyse BAŞA BAŞ (net
+  ~$0,0001 kayıp), yoğun sayfada kompakt format NET KAZANDIRIYOR
+  (+$0,0043/sayfa) — prompt'u büyütmenin maliyeti sabit (~$0,0018/sayfa,
+  girdi tarafı), kompakt formatın kazancı kart sayısıyla orantılı (çıktı
+  tarafı); tıp müfredatı ağırlıklı olarak yoğun/tablolu olduğu için net
+  etki muhtemelen kazanç yönünde.
+- Aylık (karışık %70 tipik/%30 yoğun varsayımıyla — TAHMİN): 100 sayfa
+  ≈ $2,92 (140 TL), 500 sayfa (= mevcut `MONTHLY_PAGE_CAP`) ≈ $14,58
+  (698 TL), 1000 sayfa ≈ $29,15 (1.396 TL).
+- 100/200/300 TL abonelik fiyatı + %30/%50 cache isabet oranı
+  senaryolarının HİÇBİRİNDE azami kârlı sayfa hacmi 500 sayfalık aylık
+  tavana çarpmıyor (en kötü durumda ~215 ücretli sayfa) — bu fiyat
+  aralığında darboğaz `MONTHLY_PAGE_CAP` değil, ham API maliyeti.
+- **CANLI DOĞRULAMA YOK:** Gemini tokenizer'ı hiç canlı ölçülmedi (3,7
+  kr/token bir tahmin), kart-başı çıktı token'ı yalnızca kodun kendi
+  yorumundaki tek bir gözlemden (25 kart ≈ 4.000-5.000 tkn) türetildi.
+  Gerçek bir çalıştırmadan sonra `usage` bloğu loglanıp bu rakamlar
+  kalibre edilebilir (bkz. GLM bölümündeki "TOKEN SAYIMI HİÇBİR YERDE
+  TUTULMUYOR" notu — Gemini tarafında da aynı boşluk var).
 
 **GLM (`z-ai/glm-4.5v`, OpenRouter) — 2026-08-06 ölçümü:**
 - Fiyat: girdi **$0.592/M**, çıktı **$1.80/M** (yanıtın `cost_details`
@@ -1627,7 +1821,10 @@ tekrar tekrar yazılıyordu). **Öğrenciye giden veri/davranış HİÇ değişm
 - Her iki yola da (Yol A `generateForPage` + Yol B `generate`) uygulandı —
   ikisi zaten aynı `responseSchema` sabitini paylaşıyor. DeepSeek'in
   `_jsonFormatTalimati` zarfı da (`{"cards": [...]}`) kompakt diziye hizalandı.
-- `kPromptVersion` şu an **v27** (DÜZELTME 2026-08-14: bu satır uzun süre
+- `kPromptVersion` şu an **v28** (2026-08-17: v27→v28, sayfa numarası
+  `buildPagePrompt`'un açılış cümlesinden kaldırıldı — İÇERİK kuralı değişikliği
+  DEĞİL, saf maliyet/cache düzeltmesi; bkz. "Context caching" bölümü).
+  (DÜZELTME 2026-08-14: bu satır uzun süre
   "v22" diye eski kalmıştı, gerçek dosya o zamandan beri v25'e kadar
   ilerlemişti — sürüm sayısını değiştirirken bu paragrafı da güncellemeyi
   unutma). Tarihçe: v14 → v15 (kompakt biçim), 2026-08-05'te
@@ -1754,7 +1951,10 @@ birebir izliyor ve `content`'i doğrudan `jsonDecode` ediyor. Model bir gün
 `[GLM s.N] iç JSON çözülemedi` yazılır. Bugün bu olmadı ama `json_object`
 modu bir sağlayıcıda desteklenmezse ilk şüpheli budur.
 
-**TOKEN SAYIMI HİÇBİR YERDE TUTULMUYOR** (2026-08-06'da arandı, bulunamadı):
+**TOKEN SAYIMI HİÇBİR YERDE TUTULMUYOR** (2026-08-06'da arandı, bulunamadı;
+**KISMİ DÜZELTME 2026-08-17:** Gemini tarafında artık tutuluyor — bkz.
+"Ölçüm altyapısı — `usage_metadata.dart`". GLM tarafı DEĞİŞMEDİ, aşağıdaki
+her şey GLM için hâlâ geçerli):
 `GlmService._parseCards` yanıttan yalnızca `choices[0].message.content`
 okuyup `usage` bloğunu atıyor; `ai-proxy` de `usage`'ı loglamıyor;
 `kullanim_kota.islenen_sayfa` token değil SAYFA sayıyor. Ayrıca `print()`
@@ -2005,6 +2205,19 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   (`guncellikDiliYasagiKurali`'ndeki atıf tavsiyesi silinmişti) ve kullanıcı
   aynı gün v27'de düzeltti. İkisi KASITLI olarak kapsam ayrımıyla bir arada
   duruyor, bkz. "Kart Üretim Kuralları".
+- **`buildPagePrompt`'un gövdesine sayfaya/isteğe göre DEĞİŞEN bir şey yazma**
+  (sayfa numarası, dosya adı, tarih, cihaz kimliği, rastgele id...) — prompt
+  ön ekinin sabit kalması Gemini'ın %90 indirimli context cache'inin TEK
+  koşulu. Değişken her şey prompt'un SONUNDAKİ `SAYFA N METNİ:` bloğuna
+  gitmeli. Bu tam olarak v27'de var olan ve v28'de düzeltilen hataydı; geri
+  getirmek sayfa başı maliyeti ~%39 artırır (bkz. "Context caching").
+- `maxOutputTokens`'ı maliyet düşürmek için indirme — TASARRUF ETMEZ. Yalnızca
+  üretilen token faturalanır; 4096 bir TAVAN, bütçe değil (tipik sayfa zaten
+  ~1.080 token üretiyor). İndirmek sadece yoğun tablo sayfalarını yarıda keser
+  = doğrudan kapsam kaybı.
+- Maliyet için PDF sayfalarını birleştirip tek istekte gönderme — belgelenmiş
+  "kart tavanına çarpıp tabloları atlama" sorununu geri getirir ve `sourcePage`
+  damgasını bozar. Context caching aynı kazancı bu risk olmadan sağlıyor.
 - Kompakt kart dizisinin eleman SIRASINI değiştirme/araya alan ekleme —
   pozisyonlar `kompakt*Index` sabitlerinde tek yerde tanımlı, prompt metni de
   çözücü de oradan besleniyor (bkz. "Kompakt kart çıktı biçimi"). Yeni bir

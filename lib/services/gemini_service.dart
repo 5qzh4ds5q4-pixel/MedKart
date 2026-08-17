@@ -6,6 +6,7 @@ import '../models/flashcard.dart';
 import 'flashcard_generator.dart';
 import 'flashcard_prompt.dart' as prompt;
 import 'gemini_transport.dart';
+import 'usage_metadata.dart';
 
 /// Gemini API'ye bağlanan kart üreticisi: prompt kurma + yanıt ayrıştırma
 /// burada, ham ağ isteği [GeminiTransport]'ta (bkz. o dosyanın doc yorumu —
@@ -248,6 +249,10 @@ class GeminiService implements FlashcardGenerator {
       return const [];
     }
 
+    // Token/cache ölçümü: kart ayrıştırma BAŞARISIZ olsa bile loglanmalı
+    // (istek yine faturalandı), o yüzden candidates kontrollerinden ÖNCE.
+    logUsageMetadata(decoded, 's.$sourcePage');
+
     // Beklenmedik biçimde 200 gövdesinde bir hata nesnesi geldiyse, onu kart
     // sanmadan boş liste dön.
     if (decoded['error'] != null) {
@@ -397,6 +402,8 @@ class GeminiService implements FlashcardGenerator {
         'Gemini\'dan gelen yanıt anlaşılamadı. Lütfen tekrar dene.',
       );
     }
+
+    logUsageMetadata(decoded, 'yol-B');
 
     // İstem güvenlik filtresine takıldıysa candidates hiç gelmez.
     final promptFeedback = decoded['promptFeedback'];

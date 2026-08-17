@@ -16,7 +16,7 @@ import '../models/flashcard.dart';
 /// ileride eski cache girdilerini güncel prompttan üretilmemiş diye ayırt
 /// edebiliriz. Şimdilik yalnızca KAYDEDİLİYOR, okuma/lookup tarafında bu
 /// değere göre bir filtreleme YOK.
-const String kPromptVersion = 'v27';
+const String kPromptVersion = 'v28';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -453,10 +453,26 @@ ${hasMedia ? '$etiketlemeSonHatirlatmasi\n\n' : ''}$kartEtiketleriKurali$notBlog
 }
 
 /// Yol A (PDF sayfa pipeline'ı) için sayfa-bazlı prompt.
+///
+/// SAYFA NUMARASI AÇILIŞ CÜMLESİNDE DEĞİL — BİLİNÇLİ (2026-08-17, v28):
+/// eskiden ilk cümlede "(sayfa $pageNumber)" geçiyordu ve prompt'un daha
+/// 134. karakterinde değişkenleştiği için Gemini'ın ÖRTÜK CONTEXT CACHE'i
+/// hiç devreye giremiyordu (ön ek eşiği 4.096 token, elimizdeki ortak ön ek
+/// ~36 token'dı). Numara zaten prompt'un SONUNDAKİ "SAYFA N METNİ:"
+/// bloğunda duruyor — baştaki tekrar modele ek bilgi VERMİYORDU, yalnızca
+/// statik kural bloğunun (~6.100 token) her sayfada tam fiyattan yeniden
+/// faturalanmasına yol açıyordu. Kaldırılınca ortak ön ek ~22.500 karaktere
+/// çıkıyor ve %90 indirimli cache'e uygun hale geliyor.
+///
+/// Buraya sayfaya/isteğe göre DEĞİŞEN hiçbir şey EKLEME (sayfa numarası,
+/// dosya adı, tarih, kullanıcı kimliği, rastgele id...). Değişken her şey
+/// prompt'un SONUNA, "SAYFA N METNİ:" bloğuna gitmeli — yoksa cache tekrar
+/// kırılır ve sayfa başı maliyet ~%39 artar (bkz. CLAUDE.md "Context
+/// caching").
 String buildPagePrompt(String pageText, int pageNumber, {bool hasImage = false}) {
   final goruntuBlogu = hasImage ? '\n\n$metinVeGorselBirlikteKurali' : '';
   return '''
-Sen tıp fakültesinde sınav sorusu hazırlayan deneyimli bir eğitmensin. Aşağıda bir ders slaytının TEK BİR SAYFASININ metni var (sayfa $pageNumber). SADECE bu sayfadaki bilgiden sınav odaklı flashcard üret.
+Sen tıp fakültesinde sınav sorusu hazırlayan deneyimli bir eğitmensin. Aşağıda bir ders slaytının TEK BİR SAYFASININ metni var. SADECE bu sayfadaki bilgiden sınav odaklı flashcard üret.
 
 KESİN KURALLAR:
 - Yalnızca bu sayfada AÇIKÇA yazan (veya ekliyse görüntüdeki) bilgiden kart üret. Sayfada olmayanı ekleme, uydurma. Emin değilsen kart üretme.
