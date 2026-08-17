@@ -1888,14 +1888,30 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
   genişletmeden önce çözülmesi gereken asıl sorun — muhtemel çözüm lookup'ta
   `prompt_version` eşiği (ör. "v18'den eski kayıtları isabet sayma").
 
-  **(3) ⚠️ GÜVENLİK — `pdf_cache` ANON KEY İLE OKUNABİLİYOR.** Bu dosyada
-  yıllardır "yalnızca `pdf-cache` Edge Function (service_role) erişir, istemci
-  doğrudan hiç dokunmaz" yazıyordu; **bu YANLIŞ**. `.env`'deki anon key ile
-  `GET /rest/v1/pdf_cache?select=*` 200 dönüyor ve `generated_cards` dahil TÜM
-  sütunlar okunuyor. Anon key derlenmiş istemci paketinde olduğu için pratikte
-  **herkes tüm önbelleklenmiş kartları çekebilir**. YAZMA yetkisi TEST EDİLMEDİ
-  (üretim tablosuna yazmayı denemek doğru olmazdı) — panelden RLS
-  policy'lerinin kontrol edilmesi gerekiyor.
+  **(3) `pdf_cache` ANON KEY İLE OKUNABİLİYOR — GÜVENLİK AÇIĞI DEĞİL, KASITLI
+  TASARIM.** `.env`'deki anon key ile `GET /rest/v1/pdf_cache?select=*` 200
+  dönüyor ve `generated_cards` dahil tüm sütunlar okunuyor. **Bu dosyanın
+  "yalnızca `pdf-cache` Edge Function (service_role) erişir, istemci doğrudan
+  hiç dokunmaz" ifadesi ESKİMİŞTİ** (aşağıda düzeltildi) — gerçekte
+  `20260721000002_pdf_cache_public_read.sql` migration'ı okumayı KULLANICI
+  İSTEĞİYLE anon+authenticated'e açmış: *"paylaşılan, herkese açık bir
+  önbellek — içerik hassas değil, yalnızca üretilmiş kartlar"*. Yani ilk
+  tespitteki "güvenlik bulgusu" YANLIŞ ALARMDI; sorun DB'de değil, bu
+  dosyanın tarifindeydi.
+  - **Yazma kapalı:** aynı migration INSERT/UPDATE/DELETE'e bilerek policy
+    EKLEMİYOR (policy yoksa varsayılan deny; service_role zaten RLS'i bypass
+    eder). 2026-08-17'de `supabase migration list --linked` ile **11/11
+    migration'ın local == remote** olduğu doğrulandı, yani canlı DB bu
+    tanımlarla birebir aynı.
+  - **CANLI YAZMA PROBU BİLİNÇLİ OLARAK YAPILMADI:** RLS'i INSERT ile
+    denemek, izin varsa üretim tablosuna çöp satır yazar ve DELETE de kapalı
+    olduğu için temizlenemez. Tam olarak bu 2026-07-21'de yaşandı — bkz.
+    `20260721000003_cleanup_rls_probe_row.sql` (bir probe satırını silmek için
+    yazılmış migration). Migration durumu zaten kanıt olduğu için probu
+    tekrarlama.
+  - Diğer iki tablo da doğrulandı (anon SELECT): `kullanim_kota` → `[]`
+    (deny all, policy yok), `kullanici_kutuphane` → `[]`
+    (`auth.uid() = user_id`). İkisi de beklendiği gibi.
 
 - **Model/prompt sürüm sütunları (2026-07-26, YARIM İŞ):** `pdf_cache`'e
   `model_version` / `prompt_version` sütunları eklendi (migration
@@ -2131,10 +2147,18 @@ fonksiyon deploy'u GEREKTİRMİYOR (panelden veya `supabase secrets set` ile
 anında etkili), ama fonksiyonun KENDİSİ ilk kez bu kontrolü içerecek şekilde
 2026-08-03'te deploy edildi (`npx supabase functions deploy ai-proxy`).
 
-`pdf_cache` tablosu da aynı RLS-kilitli desende (`supabase/migrations/
-20260721000000_create_pdf_cache.sql`, `hash`/`generated_cards`/`created_at`)
-— yalnızca `pdf-cache` Edge Function'ı (service_role) erişir, istemci
-doğrudan hiç dokunmaz. Bkz. "Maliyet Optimizasyonu".
+`pdf_cache` tablosu (`supabase/migrations/20260721000000_create_pdf_cache.sql`,
+`hash`/`generated_cards`/`created_at`) **YAZMA tarafında** aynı RLS-kilitli
+desende: INSERT/UPDATE/DELETE'e hiç policy yok, yalnızca `pdf-cache` Edge
+Function'ı (service_role, RLS'i bypass eder) yazabiliyor.
+**OKUMA tarafında DEĞİL — DÜZELTME (2026-08-17):** bu satır uzun süre
+"istemci doğrudan hiç dokunmaz" diyordu, YANLIŞTI. Bir gün sonraki
+`20260721000002_pdf_cache_public_read.sql` migration'ı okumayı KULLANICI
+İSTEĞİYLE anon+authenticated'e AÇMIŞ (gerekçe: "paylaşılan, herkese açık bir
+önbellek — içerik hassas değil"). Yani anon key'i olan herkes
+`generated_cards` dahil tüm satırları okuyabilir; bu bilinçli bir tasarım
+kararı, açık değil. Canlı doğrulandı (2026-08-17). Bkz. "Maliyet
+Optimizasyonu".
 
 Supabase projesi: "MedKart" (ref `zmwjlchbpiyjzwvkaatu`, eu-central-1).
 CANLI DOĞRULANDI (2026-07-20): gerçek bir PDF, Playwright ile UI üzerinden
