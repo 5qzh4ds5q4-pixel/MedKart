@@ -87,7 +87,10 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > başına üretimdeki varsayılan (görselli) akışta cache'i AÇMIYOR** — görsel
 > parçası 0. pozisyonda ve her sayfada değişiyor; görsel sırası BİLİNÇLİ
 > OLARAK değiştirilmedi (canlı A/B ister). Bkz. "Context caching" bölümü;
-> test 675→**695**, `flutter analyze` baseline 90→**92** (yalnızca yeni
+> test 675→**695**, `flutter analyze` baseline 90→**92** (DÜZELTME 2026-08-18:
+> bu sayı eskidi, proje geneli baseline ölçüldü ve **120** — artış 10 Ağustos
+> sonrası eklenen `tool/` script'lerinden geliyor, bu oturumun değişiklikleri
+> 0 yeni uyarı ekledi) (yalnızca yeni
 > dosyadaki `avoid_print`).
 
 ## Ne yapıyor bu uygulama
@@ -206,6 +209,13 @@ sağlayıcısı, flash-lite model geçişi, üç prompt tekniği) TÜKENMİŞTİ
   doğrulandı). Paket **667/667 yeşil**.
 - Ayrıntı için bkz. "GLM sağlayıcısı" bölümü (aşağıda) — artık bu kapanış
   notuna atıf yapıyor.
+- **KAPSAM KAYDI (2026-08-18): bu ret KART ÜRETİMİ içindir, "flash-lite'ı
+  hiçbir yerde kullanma" demek DEĞİLDİR.** Aynı gün `TopicScanService` (PDF
+  konu ön-taraması) bilinçli olarak flash-lite'a alındı — orada istenen şey
+  kart derinliği değil, kısa metin örneklerinden konu başlığı çıkarmak; yani
+  bu retin dayandığı "yüzeysel/tanım-düzeyi kart üretme" sorunu o işi
+  etkilemiyor. Bkz. "Konu ön-taraması (`TopicScanService`)". İkisini
+  "tutarlılık" adına tek modele çekme.
 
 ### 0.6. Ayarlar ekranı — "ayarlar ekranı.png" mockup'ına göre kart-ızgara + VERİ DÜZELTMESİ
 `~/Downloads/ayarlar ekranı.png` referans alınarak `SettingsScreen` düz
@@ -953,6 +963,55 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
   El yazısı kuralındaki dar "el yazısı/görselde" atıf yasağından FARKI: bu
   kural GENEL, kaynak türünden bağımsız HER ifadeyi kapsar (tedavi/kılavuz
   istisnası hariç). **CANLI ÖLÇÜLMEDİ.** `kPromptVersion` v25→v26→**v27**.
+- **`ornekTabanliKartKurali` (YENİ, 2026-08-18, kullanıcı talimatıyla, HER İKİ
+  YOL, v30):** kaynakta bir kavramın TANIMININ YANINDA somut örnek(ler)
+  veriliyorsa (ör. "neoantijen: X mutasyonu, Y mutasyonu"), o kavram için
+  tanım kartına **EK OLARAK** (onun YERİNE değil) bir örnek/uygulama kartı da
+  üretilir. Örnek kart düz tanımı TEKRAR SORMAZ — verilen örneği ya da ona
+  benzer YENİ bir senaryoyu kullanıp öğrencinin kavramı TANIYABİLDİĞİNİ /
+  UYGULAYABİLDİĞİNİ test eder. Prompt'ta yanlış/doğru örnek çifti var
+  ("Neoantijen örnekleri nelerdir?" YANLIŞ ↔ KRAS mutasyonu senaryosu DOĞRU).
+  - **EN KRİTİK MADDE:** kaynakta kavramın yanında HİÇ somut örnek yoksa bu
+    kart tipi ÜRETİLMEZ. Uydurulmuş bir "örnek" kaynak sadakatinin ihlalidir
+    ve prompt bunu açıkça "örnek kart üretmemekten çok daha ciddi bir hata"
+    diye niteler.
+  - **`sinavTipiKurali` ile ÖRTÜŞEBİLİR ama aynı değil:** o kural KLİNİK/
+    patolojik ilişkiler için hasta senaryosu ister; bu kural kaynakta ZATEN
+    VERİLMİŞ somut örnekler için (klinik olsun olmasın — mutasyon/ilaç/tür
+    adı) tanıma-uygulama kartı ister. Klinik bir örnekte ikisi aynı kartta
+    buluşabilir. **Bu çakışma BİLEREK ARBİTRE EDİLMEDİ** — prompt'a "ikisinden
+    birini seç" gibi bir hakem cümlesi EKLENMEDİ, çünkü v26'da iki kuralı
+    "tutarlı hale getirme" girişimi yanlış çıkmıştı (bkz.
+    `kaynakReferansiGizlemeKurali` TARİHÇE notu). Çıktıda ikiz kart görürsen
+    ÖNCE ÖLÇ, sonra hakem cümlesi ekle.
+  - Prompt maliyeti: +988 karakter ≈ **+323 token/istek** (her iki yolda da).
+  - **✅ A/B İLE CANLI ÖLÇÜLDÜ (2026-08-18) — KURAL FAZLALIK ÜRETMİYOR.**
+    Şüphe şuydu: kural, `sinavTipiKurali` ile örtüşüp "aynı bilgiyi iki kez
+    soran" kart üretiyor olabilir mi? Kontrollü deney kuruldu
+    (`tool/ab_ornek_kurali_test.dart`, pakete dahil DEĞİL): aynı PDF, aynı
+    sayfalar, aynı model/config; TEK fark bu bloğun prompt'ta var/yok olması.
+    80 gerçek çağrı, ölçülen maliyet **$1,32**.
+    - Üretimde fazlalık üreten sayfalarda: kural YOKken **%34,7**, VARken
+      **%32,7** — yani kural kaldırılınca fazlalık DÜŞMÜYOR. Kart sayısına
+      etkisi de ihmal edilebilir (147 → 150).
+    - Kuralın gerçek etkisi küçük ama DOĞRU yönde: senaryo/uygulama metni
+      içeren kart payı %25,9 → **%28,7**.
+    - **FAZLALIĞIN ASIL KAYNAĞI BAŞKA, ve v30'dan ESKİ:** (1) sıfır metinli,
+      görsel-ağırlıklı sayfalar (üretimdeki en büyük iki katkı: s.10 → 8 kart,
+      s.20 → 6 kart; metin-only test bunları yapısal olarak kapsayamıyor,
+      HÂLÂ ÖLÇÜLMEDİ), (2) **`sinavTipiKurali`'nin koşulsuz "EK olarak
+      MUTLAKA" ifadesi** — kuralın hiç olmadığı arm'da bile 9 tanım+senaryo
+      çifti oluştu.
+    - **KARAR: bu kurala DOKUNMA.** Kırpmak fazlalığı düşürmez, yalnızca
+      uygulama kartlarını kaybettirir. Ayrıntılı döküm:
+      `SYSTEM_STATE_2026-08-18.md` §7.1b.
+    - **METODOLOJİ UYARISI:** ilk turda "metni en uzun sayfalar" seçilmişti ve
+      iki arm da ~%6 çıkıp "fark yok" gibi göründü — ama o sayfalar üretimde de
+      yalnızca %3,5 fazlalık gösteriyordu, yani olgu ORADA HİÇ YOKTU. Bu tür
+      A/B'lerde örneklemi, olgunun GERÇEKTEN görüldüğü sayfalardan al.
+  - Test: `test/ornek_tabanli_kart_kurali_test.dart`
+    (8 test — kural metni, iki yola da girdiği, Yol A'da statik cache bloğunda
+    durduğu). `kPromptVersion` v28→**v30** (v29 ATLANDI, aşağı bkz.).
 
 ## Hata Yönetimi (`gemini_transport.dart` + `pdf_card_pipeline.dart` ile doğrulandı)
 - **Savunmasız cast bug'ı (çözüldü):** API cevabını `as List` ile cast etmeden
@@ -1830,6 +1889,113 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
   rakamıyla doğrudan karşılaştırma yapmak için önce sayfa sayısı ya da
   `usage` logu gerekir.
 
+## Boş sayfa ölçümü — `emptyResultPages` + `pdf_isleme_olcum` (2026-08-18)
+"Sayfaların yüzde kaçı modele gidip boş dizi (`[]`) dönüyor, yani kart
+üretmeye değmez bulunuyor?" sorusunu artık TAHMİN etmeye gerek yok.
+
+**ÜÇ SAYFA SONUCU AYRI ŞEYDİR, KARIŞTIRMA** (`PipelineResult`):
+| Liste | Anlamı | Maliyet | Kart |
+|---|---|---|---|
+| `emptyTextPages` | modele HİÇ gitmedi (metin+görüntü yok, ön-filtre) | yok | yok |
+| `emptyResultPages` | modele GİTTİ, `[]` döndü — **hata değil, kuralın beklediği davranış** | VAR | yok |
+| `failedPages` | modele gitti, istisna fırlattı (ağ/parse/timeout) | var | yok |
+
+`emptyResultPages` 2026-08-18'de eklendi. Öncesinde `[]` dönen sayfa HİÇBİR
+YERDE kaydedilmiyordu — `processedPages`'e sessizce başarılı sayılıyordu — bu
+yüzden oran ancak `pdf_cache`'teki `sourcePage` BOŞLUKLARINDAN tahmin
+edilebiliyordu (2026-08-17 ölçümü: 12 boşluk / 91 sayfa ≈ **%13**, ama 4
+PDF'lik örneklem + numaralandırma kayması gürültüsü + PDF'in SONUNDAKİ boş
+sayfaların görünmezliği yüzünden yalnızca kaba bir alt sınırdı). Oranın DOĞRU
+paydası `PipelineResult.billedPages` (toplam − ön-filtre − hata); toplam
+sayfaya bölmek yanıltıcı olur, modele hiç gitmemiş sayfa "değmez bulundu"
+sayılamaz.
+
+**KALICI KAYIT: `pdf_isleme_olcum` tablosu** (migration
+`20260818000000_create_pdf_isleme_olcum.sql`, 2026-08-18'de `supabase db push`
+ile CANLIYA ALINDI; varlığı anon SELECT ile doğrulandı → 200 + `[]`, olmayan
+tablo 404 döner). Satır başına BİR ÇALIŞTIRMA (PDF başına değil).
+- **Neden `pdf_cache`'e sütun DEĞİL, ayrı tablo:** (1) `pdf_cache` satır başına
+  bir PDF tutar, zaman serisi olmaz; (2) `pdf_cache`'e yazma yalnızca TAM PDF +
+  cache MISS + en az 1 kart üretilmiş çalıştırmalarda oluyor — yani DARALTILMIŞ
+  (konu/sayfa aralığı) çalıştırmalar, cache HIT'ler ve HİÇ kart üretmeyen
+  çalıştırmalar sistematik olarak dışarıda kalırdı, ki ölçmek istediğimiz tam
+  da bu uçlar; (3) sütun eklemek `pdf-cache` Edge Function'ını değiştirip
+  DEPLOY etmeyi gerektirirdi. Yeni tabloya istemci DOĞRUDAN yazıyor
+  (`kullanici_kutuphane` deseni, RLS `auth.uid() = user_id`) — **hiçbir Edge
+  Function değişmedi/deploy edilmedi.**
+- Yazan: `lib/services/pipeline_metrics_service.dart` → `PdfImportScreen._run`
+  sonunda `unawaited(...)`. **Best-effort:** giriş yoksa/Supabase yoksa/ağ
+  patlarsa sessizce no-op, kart üretimi ASLA etkilenmez. Önbellek yazımının
+  AKSİNE koşulsuz çalışır (hash null olsa da, kart 0 olsa da, kota kesse de).
+- RLS: insert+select yalnızca kendi satırına; **UPDATE/DELETE'e bilerek policy
+  YOK** (ölçüm geçmişte olmuş bir olay, sonradan değiştirilemez). Toplu analiz
+  Supabase panelinden service_role ile yapılır.
+- **INSERT PROBU BİLİNÇLİ OLARAK YAPILMADI:** anon insert RLS'e takılmalı, ama
+  takılmasaydı DELETE de kapalı olduğu için silinemeyen bir çöp satır kalırdı —
+  2026-07-21'de tam bu yaşandı (bkz. `20260721000003_cleanup_rls_probe_row.sql`).
+  İlk gerçek satır bir sonraki PDF yüklemesinde kendiliğinden düşecek.
+- Veri birikince oranı sormak için (panel, service_role):
+  ```sql
+  select sum(bos_donen_sayfa) as bos,
+         sum(bos_donen_sayfa + kart_ureten_sayfa) as faturalanan,
+         round(100.0 * sum(bos_donen_sayfa)
+               / nullif(sum(bos_donen_sayfa + kart_ureten_sayfa), 0), 1) as yuzde
+  from pdf_isleme_olcum;
+  ```
+- Test: `test/pipeline_metrics_test.dart` (9 test — alan eşlemesi, **paydalar
+  toplamı = `toplam_sayfa` eşitliği**, sıfır-kart ve daraltılmış çalıştırma,
+  Supabase yoksa no-op) + `test/pdf_card_pipeline_test.dart` içindeki
+  `emptyResultPages` grubu (5 test). Paket 719 → **730/730 yeşil**,
+  `flutter analyze` **0 yeni uyarı**.
+- **UI'a EKLENMEDİ (bilinçli):** `PdfImportScreen`'in bitiş özeti hâlâ yalnızca
+  `emptyTextPages`/`failedPages` gösteriyor. `[]` dönen sayfa bir hata değil,
+  kullanıcıya "3 sayfa atlandı" demek yanlış sinyal olurdu. İstenirse ayrı iş.
+
+## Konu ön-taraması (`TopicScanService`) — flash-lite BURADA KULLANILIYOR
+`lib/services/topic_scan_service.dart` (2026-08-10'da eklendi, bu dosyaya ilk
+kez 2026-08-18'de işlendi): pahalı Yol A pipeline'ından ÖNCE çalışan ucuz bir
+ön-tarama. Her sayfanın metninden yalnızca ilk ~200 karakteri
+(`sampleCharsPerPage`) alıp tek istekte (parça başına, `maxPagesPerBatch` =
+150) Gemini'ye gönderir ve PDF'i ana konu başlıklarına + sayfa aralıklarına
+böler. **Görsel/vision HİÇ gönderilmez, sayfa başına ayrı çağrı YOKTUR.**
+Amaç: kullanıcı istemediği konuları eleyince o sayfalar pahalı pipeline'a hiç
+girmez (bkz. `PdfTopicSelectionScreen`). Hata toleranslı — ağ/parse sorununda
+istisna fırlatmaz, `null` döner ve çağıran "tüm sayfalar" davranışına düşer;
+bu adım bir maliyet optimizasyonu, kullanıcıyı asla engellememeli.
+
+**MODEL: `TopicScanService.model = 'gemini-3.5-flash-lite'`** (2026-08-18'de
+`GeminiService.model`'den ayrıldı). Bu, "Devam Eden İş" 0.7'deki flash-lite
+retiyle ÇELİŞMEZ, kapsamları ayrıktır:
+- 0.7'deki ret **kart üretimi** içindir; gerekçe flash-lite'ın yüzeysel/
+  tanım-düzeyi kart üretmesi, yani DERİNLİK sorunuydu. Üç ayrı prompt tekniği
+  (v23-v25) denenip çözülemedi ve production `gemini-3.5-flash`'ta sabitlendi.
+- Konu ön-taramasında üretilen şey kart değil, 1-4 kelimelik başlık + sayfa
+  aralığı. Derinlik gerekmiyor, dolayısıyla retin dayandığı sorun burada
+  ortaya çıkmıyor. Kart üretimi HÂLÂ `GeminiService.model`
+  (`gemini-3.5-flash`) ile yapılıyor — o karar DEĞİŞMEDİ.
+
+**TUZAK — `thinkingConfig` guard'ı GERÇEKTEN gönderilen modele bakmalı:**
+`gemini-3.5-flash-lite` `generationConfig.thinkingConfig`'i hiç kabul etmiyor
+(400 `INVALID_ARGUMENT`, tek başına gönderilse bile — 2026-08-07'de canlı
+doğrulandı, bkz. `GeminiService.supportsThinkingConfig` doc yorumu).
+`_scanBatch` bu kontrolü yapıyor ama 2026-08-18'e kadar
+`GeminiService.supportsThinkingConfig(GeminiService.model)` diye SORUYORDU —
+yani `flash`'a bakıp `true` alıyordu. Model değişikliğinde yalnızca
+`_transport.send(model: ...)` güncellenseydi guard yine `true` döner ve her
+istek 400 ile ölerdi. Guard artık servisin KENDİ `model` sabitine bakıyor.
+Modeli bir daha değiştirirsen bu iki yerin (guard + send) AYNI sabitten
+beslendiğini koru.
+- **Yan etki:** flash-lite bu alanı hiç kabul etmediği için bu çağrıda
+  `thinkingBudget: 0` artık GÖNDERİLEMİYOR — thinking davranışı modelin kendi
+  varsayılanına kalıyor, kodla bastırılamıyor. Modelin doğasından gelen bir
+  sınır, yapılabilecek bir şey yok. (Kart üretim yolunda `thinkingBudget: 0`
+  aynen duruyor, orası flash.)
+- Test: `test/topic_scan_service_test.dart` — istek zarfındaki `model`'in
+  `TopicScanService.model` olduğunu, guard'ın o modele göre karar verdiğini
+  ve bugünkü kasıtlı seçimi (`flash-lite` + `supportsThinkingConfig == false`)
+  doğruluyor. Ayrıca `test/pdf_topic_selection_screen_test.dart` ekranı
+  kapsıyor. 2026-08-18'de paket **719/719 yeşil**.
+
 ## Maliyet Optimizasyonu (2026-07-21)
 - **Paylaşılan PDF→kart önbelleği:** Aynı PDF'in SHA-256 hash'i (dosya
   adından bağımsız, içerik bazlı — `PdfCacheService.hashBytes`) TÜM
@@ -1960,8 +2126,11 @@ içeriği (kart sayısı, sayfa metni uzunluğu) ve karakter→token oranı
      çözülemiyorsa ASLA ezilmez (sürümsüz kayıt, sürümlünün yerini almamalı).
      `hit_count` payload'da olmadığı için `ON CONFLICT DO UPDATE` onu
      değiştirmez — sayaç korunur.
-  - **Eşik: `flashcard_prompt.dart` → `kMinCacheablePromptVersion` (şu an
-    **27**).** `kPromptVersion` İLE AYNI ŞEY DEĞİL, bilinçli olarak ayrı: her
+  - **Eşik: `flashcard_prompt.dart` → `kMinCacheablePromptVersion` (2026-08-18'de
+    27 → **30** yükseltildi — `ornekTabanliKartKurali` üretilen kart KÜMESİNİ
+    değiştiriyor, v27/v28 kayıtları örnek/uygulama kartlarını HİÇ taşımaz, yani
+    eksik set servis eder. **Bugünkü pratik maliyeti SIFIR:** canlı önbellekteki
+    6 kaydın en yenisi v24, zaten 27 eşiğini de geçmiyorlardı).** `kPromptVersion` İLE AYNI ŞEY DEĞİL, bilinçli olarak ayrı: her
     sürüm artışı kart İÇERİĞİNİ değiştirmez (ör. v28 saf maliyet/cache
     düzeltmesiydi, v27 kartları içerik olarak ayırt edilemez). İkisini
     eşitlemek sağlam kayıtları boşuna çöpe atardı. **Yalnızca kart
@@ -2049,7 +2218,14 @@ tekrar tekrar yazılıyordu). **Öğrenciye giden veri/davranış HİÇ değişm
 - Her iki yola da (Yol A `generateForPage` + Yol B `generate`) uygulandı —
   ikisi zaten aynı `responseSchema` sabitini paylaşıyor. DeepSeek'in
   `_jsonFormatTalimati` zarfı da (`{"cards": [...]}`) kompakt diziye hizalandı.
-- `kPromptVersion` şu an **v28** (2026-08-17: v27→v28, sayfa numarası
+- `kPromptVersion` şu an **v30** (2026-08-18: v28→v30,
+  `ornekTabanliKartKurali` eklendi — İÇERİK kuralı, bu yüzden
+  `kMinCacheablePromptVersion` de 30'a çekildi. **v29 BİLİNÇLİ OLARAK
+  ATLANDI, yeniden kullanma:** o numara 2026-08-17'de statik bloğun
+  `systemInstruction`'a taşınması denemesinde kullanılmış, canlı ölçümde
+  kazanç çıkmayınca değişiklik geri alınmış ve sürüm v28'de kalmıştı; aynı
+  numarayı farklı bir anlamla tekrar kullanmak `pdf_cache.prompt_version`
+  sütununu ikircikli yapardı.) Öncesi: **v28** (2026-08-17: v27→v28, sayfa numarası
   `buildPagePrompt`'un açılış cümlesinden kaldırıldı — İÇERİK kuralı değişikliği
   DEĞİL, saf maliyet/cache düzeltmesi; bkz. "Context caching" bölümü).
   (DÜZELTME 2026-08-14: bu satır uzun süre
@@ -2472,6 +2648,26 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
 - İstatistik ekranının gövdesini `ListView`'a geri çevirme — ızgarada
   görünmeyen sütun hiç build edilmiyordu, `SingleChildScrollView` bilinçli.
 - Thinking modunu açma (maliyet).
+- Kaynakta somut örnek YOKKEN örnek/uygulama kartı üretme (ya da modelden
+  istemesini sağlayacak şekilde `ornekTabanliKartKurali`'ni gevşetme) —
+  uydurulmuş örnek, kaynak sadakatinin ihlali. Bu kuralı `sinavTipiKurali` ile
+  "tutarlı hale getirmek" için birini kırpma; çakışma bilerek arbitre
+  edilmedi (bkz. "Kart Üretim Kuralları"). **2026-08-18 A/B'si
+  kuralı AKLADI** — kart fazlalığı ondan gelmiyor (%34,7 kuralsız vs %32,7
+  kurallı), o yüzden "fazlalık var" gerekçesiyle kırpma.
+- `kPromptVersion`'da v29'u kullanma — denenip geri alınmış bir numara, atlandı.
+- `emptyResultPages`'i `failedPages`'e karıştırma / hata gibi raporlama —
+  modele gidip `[]` dönmek kuralın BEKLEDİĞİ davranış (kapak/ajanda/kapanış
+  slaytı). Oranı hesaplarken payda `billedPages`, `totalPages` DEĞİL (bkz.
+  "Boş sayfa ölçümü").
+- `pdf_isleme_olcum`'a yazımı kullanıcı akışına bağlama (await etme, hatasını
+  yüzeye çıkarma) — telemetri, kart üretiminin başarısı buna bağlı olmamalı.
+- `TopicScanService.model`'i "tutarlılık olsun" diye `GeminiService.model`'e
+  geri bağlama — konu ön-taraması bilinçli olarak daha ucuz flash-lite'ı
+  kullanıyor ve bu, kart üretimi için verilmiş flash-lite retiyle çelişmiyor
+  (kapsamlar ayrık, bkz. "Konu ön-taraması (`TopicScanService`)"). Modeli
+  değiştirirsen `thinkingConfig` guard'ının da AYNI sabite baktığından emin ol,
+  yoksa flash-lite'a thinkingConfig gidip her istek 400 döner.
 - PDF önbelleğini (`pdf_cache`) sayfa aralığı/konu ile daraltılmış
   çalıştırmalar için kullanma/yazma — yalnızca TÜM PDF işlendiğinde geçerli
   (bilinçli kapsam sınırı, bkz. "Maliyet Optimizasyonu").
