@@ -41,6 +41,20 @@ class TopicScanService {
   /// bağlam yeterli.
   static const int sampleCharsPerPage = 200;
 
+  /// Bu ön-tarama [GeminiService.model]'i DEĞİL, ondan daha ucuz olan
+  /// `gemini-3.5-flash-lite`'ı kullanır: iş yalnızca kısa metin
+  /// örneklerinden konu başlığı çıkarmak, kart üretimindeki derinlik
+  /// gerekmiyor. (Flash-lite KART ÜRETİMİ için reddedilmişti — bkz.
+  /// CLAUDE.md "Devam Eden İş" 0.7; bu sabit o kararı değiştirmez,
+  /// yalnızca bu ucuz ön-tarama adımını kapsar.)
+  ///
+  /// DİKKAT: bu model `generationConfig.thinkingConfig`'i KABUL ETMİYOR
+  /// (400 INVALID_ARGUMENT, bkz. [GeminiService.supportsThinkingConfig]).
+  /// [_scanBatch]'teki guard kararını [GeminiService.model]'e değil BU
+  /// sabite göre verir — modeli değiştirirsen guard kendiliğinden doğru
+  /// kalır.
+  static const String model = 'gemini-3.5-flash-lite';
+
   static const Map<String, dynamic> _responseSchema = {
     'type': 'ARRAY',
     'items': {
@@ -93,18 +107,19 @@ class TopicScanService {
         'responseSchema': _responseSchema,
         'temperature': 0.2,
         'maxOutputTokens': 4096,
-        // GeminiService.model desteklemiyorsa (ör. gemini-3.5-flash-lite,
+        // Bu servisin KENDİ [model]'i desteklemiyorsa (gemini-3.5-flash-lite,
         // bkz. GeminiService.supportsThinkingConfig doc yorumu — 400
         // INVALID_ARGUMENT döner) thinkingConfig hiç eklenmez. Aynı kararı
         // burada tekrar yazmak yerine tek kaynak olan o statik fonksiyona
-        // devrediyoruz.
+        // devrediyoruz; kontrol edilen model, aşağıda GERÇEKTEN gönderilen
+        // model ile aynı olmalı — GeminiService.model'e bakmak yanlış olur.
         if (_thinkingBudget != null &&
-            GeminiService.supportsThinkingConfig(GeminiService.model))
+            GeminiService.supportsThinkingConfig(model))
           'thinkingConfig': {'thinkingBudget': _thinkingBudget},
       },
     });
 
-    final response = await _transport.send(model: GeminiService.model, body: body);
+    final response = await _transport.send(model: model, body: body);
     if (response.statusCode != 200) return null;
 
     return _parse(response.body, firstPage: firstPage, lastPage: lastPage);

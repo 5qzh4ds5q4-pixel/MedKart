@@ -174,9 +174,9 @@ void main() {
   });
 
   test(
-    'aktif model thinkingConfig desteklemiyorsa (GeminiService.model, bkz. '
-    'GeminiService.supportsThinkingConfig) payload\'da thinkingConfig HİÇ '
-    'olmuyor, destekleniyorsa gönderiliyor',
+    'istek TopicScanService.model\'e gidiyor ve o model thinkingConfig '
+    'desteklemiyorsa (bkz. GeminiService.supportsThinkingConfig) payload\'da '
+    'thinkingConfig HİÇ olmuyor, destekleniyorsa gönderiliyor',
     () async {
       http.Request? captured;
       final service = TopicScanService(
@@ -197,22 +197,39 @@ void main() {
       await service.scan(_pages(3));
 
       // Transport gövdeyi Edge Function zarfına ('payload' altına) sarıyor.
-      final body =
-          (jsonDecode(captured!.body) as Map<String, dynamic>)['payload']
-              as Map<String, dynamic>;
+      final envelope = jsonDecode(captured!.body) as Map<String, dynamic>;
+      final body = envelope['payload'] as Map<String, dynamic>;
       final generationConfig =
           body['generationConfig'] as Map<String, dynamic>;
 
-      // GeminiService.model'in O ANKİ değerine göre iki dalı da doğrular —
+      // Bu ön-tarama GeminiService.model'i DEĞİL kendi (daha ucuz) modelini
+      // kullanıyor. Aşağıdaki guard doğrulaması ancak istek GERÇEKTEN o
+      // modele gidiyorsa anlamlı — o yüzden önce onu sabitliyoruz.
+      expect(envelope['model'], TopicScanService.model);
+
+      // TopicScanService.model'in O ANKİ değerine göre iki dalı da doğrular —
       // aynı mantık gemini_service_test.dart'taki eşdeğer testte de var,
       // burada topic_scan_service'in kendi generationConfig'inin de
       // GeminiService.supportsThinkingConfig'e gerçekten UYDUĞUNU (kopyalayıp
-      // kendi kararını vermediğini) doğruluyoruz.
-      if (GeminiService.supportsThinkingConfig(GeminiService.model)) {
+      // kendi kararını vermediğini) doğruluyoruz. DİKKAT: kontrol edilen
+      // model, yukarıda gönderildiği doğrulanan model ile AYNI olmalı —
+      // GeminiService.model'e bakmak bu servis için yanlış cevabı verir.
+      if (GeminiService.supportsThinkingConfig(TopicScanService.model)) {
         expect(generationConfig.containsKey('thinkingConfig'), isTrue);
       } else {
         expect(generationConfig.containsKey('thinkingConfig'), isFalse);
       }
     },
   );
+
+  test('ön-tarama modeli flash-lite ve bu model thinkingConfig kabul etmiyor', () {
+    // Yukarıdaki testin koşullu dalı model değişse de yeşil kalır; bu test
+    // BUGÜNKÜ kasıtlı seçimi sabitler: ön-tarama ucuz modele gidiyor ve o
+    // model thinkingConfig'i reddediyor (400 INVALID_ARGUMENT).
+    expect(TopicScanService.model, 'gemini-3.5-flash-lite');
+    expect(
+      GeminiService.supportsThinkingConfig(TopicScanService.model),
+      isFalse,
+    );
+  });
 }
