@@ -90,8 +90,17 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > test 675→**695**, `flutter analyze` baseline 90→**92** (DÜZELTME 2026-08-18:
 > bu sayı eskidi, proje geneli baseline ölçüldü ve **120** — artış 10 Ağustos
 > sonrası eklenen `tool/` script'lerinden geliyor, bu oturumun değişiklikleri
-> 0 yeni uyarı ekledi) (yalnızca yeni
-> dosyadaki `avoid_print`).
+> 0 yeni uyarı ekledi) (yalnızca yeni dosyadaki `avoid_print`). Aynı günün
+> ilerleyen saatlerinde Gemini'ın
+> "Flex" service tier'ı (`serviceTier: FLEX`) maliyet kaldıracı olarak
+> değerlendirildi ve REDDEDİLDİ — mevcut mimari kod okunarak incelendi:
+> kart üretimi tamamen senkron/kullanıcı-bekletmeli (`PdfImportScreen`,
+> "pencereyi açık tut" UX, `PopScope(canPop: !_running)`), tek istek
+> timeout'u sabit 120sn (`GeminiTransport.defaultRequestTimeout`) ve
+> timeout'lar BİLİNÇLİ olarak retry edilmiyor (çift faturalama riski,
+> bkz. "Hata Yönetimi"). Flex'in 1-15 dakikalık belirsiz gecikmesi bu
+> mimariyle uyumsuz. Ayrıntı ve yeniden değerlendirme koşulu "Bilinmeyen /
+> Henüz Kararlaştırılmamış" bölümünde.
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
@@ -2271,10 +2280,23 @@ tekrar tekrar yazılıyordu). **Öğrenciye giden veri/davranış HİÇ değişm
   önceliklendirme, tablo eksiksizliği, kaynağa atıf yasağı, zorluk
   kalibrasyonu) — yalnızca çıktı biçimi ve o biçimi anlatan blok
   (`kartEtiketleriKurali`) değişti.
-- **CANLI DOĞRULANMADI:** Gemini hesabının kredisi tükenmiş durumda (her
-  istek 429 "prepayment credits are depleted"), bu yüzden şemanın API
-  tarafından kabul edildiği gerçek çağrıyla teyit edilemedi. Risk, şema en
-  sade hâline indirilerek (yukarı bkz.) asgariye çekildi.
+- **CANLI DOĞRULANDI (2026-08-17 EKİ):** yukarıdaki "kredi tükendi, teyit
+  edilemedi" notu artık ESKİMİŞ. 2026-08-17'deki `usage_metadata`/context
+  caching ölçümleri (`tool/measure_cache_test.dart`, bkz. "Context caching")
+  gerçek Gemini API çağrılarıyla yapıldı ve `responseSchema` her seferinde
+  kabul edildi — aksi halde 400 dönerdi ve o ölçümler hiç çıkmazdı. Şema
+  (ARRAY of ARRAY, nullable STRING) fiilen doğrulanmış durumda; şemayı en
+  sade hâlinde tutma kararı (`minItems`/`maxItems` yok) hâlâ geçerli ama artık
+  "kredi yok, denenemedi" gerekçesiyle değil, kendi başına bilinçli bir tercih
+  olarak duruyor.
+  - **NOT — pozisyon açıklaması PROMPT METNİNDEN ÇIKARILAMAZ:** Gemini'ın
+    şema alt kümesi heterojen ("tuple") dizi desteklemiyor — bir ARRAY'in tek
+    `items` şeması olabilir, pozisyona göre farklı tip/anlam veremez. Yani
+    şema kartın 9 pozisyonunun HANGİSİNİN ne olduğunu (soru/kisaCevap/zorluk
+    kodu/...) hiçbir şekilde taşıyamıyor — bu bilgi yalnızca
+    [kartEtiketleriKurali]'ndeki SIRA açıklamasında var. O blok kısaltılıp
+    şemaya "devredilemez"; kaldırılırsa model pozisyonların anlamını
+    bilmediği için kart üretimi bozulur.
 - Test: `test/compact_card_format_test.dart` (33 test — pozisyon eşlemesi,
   kod eşlemesi, bozuk/eksik dizi, uçtan uca iki yol).
 
@@ -2595,6 +2617,34 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   hâlâ açık bir soru, olası çözüm aynı kalıyor: değeri interaktif çalışma
   deneyimine (SRS, istatistik, MCQ) kaydırmak.
 - Ses kaydından kart üretme fikri — RAFA KALDIRILDI, şimdilik yapılmıyor.
+- **Gemini Flex service tier — DEĞERLENDİRİLDİ VE REDDEDİLDİ (2026-08-17).**
+  `serviceTier: "FLEX"` (istek gövdesinin en üst seviyesinde, `generationConfig`
+  içinde DEĞİL) maliyet düşürme kaldıracı olarak incelendi. Kod okunarak üç
+  şey doğrulandı:
+  - Kart üretimi tamamen SENKRON/kullanıcı-bekletmeli: `PdfImportScreen`
+    öğrenciyi ilerleme ekranında tutuyor (`PopScope(canPop: !_running)`,
+    "Bu pencereyi açık tut." metni), arka planda devam eden bir iş kuyruğu/
+    bildirim mekanizması YOK — sekme kapanırsa iş durur.
+  - Tek istek timeout'u sabit **120 saniye**
+    (`GeminiTransport.defaultRequestTimeout`, `gemini_transport.dart`) ve
+    timeout'lar BİLİNÇLİ olarak yeniden denenmiyor (`isTimeout` hem
+    transport hem `PdfCardPipeline._generateWithRetry` seviyesinde rethrow
+    ediliyor — "sağlayıcı üretimi tamamlayıp faturalamış olabilir, tekrar
+    denemek çift ödeme demek").
+  - Paralellik (`concurrency: 4`, bağımsız worker havuzu) Flex'in
+    dakikalarca sürebilen gecikmesine yapısal olarak UYGUN (bir sayfa yavaş
+    kalınca diğer worker'ları BEKLETMİYOR) — ama yukarıdaki 120sn'lik sabit
+    timeout bu avantajı test etmeye bile fırsat bırakmadan isteği zaten
+    kesiyor.
+  - **KARAR:** Flex'in 1-15 dakikalık belirsiz yanıt süresi, mevcut
+    senkron/kullanıcı-bekletmeli mimariyle UYUMSUZ. Gerçek bir arka plan/
+    asenkron iş kuyruğu mimarisi (öğrenci ekrandan ayrılabilir, kartlar
+    hazır olunca bildirim/güncelleme gelir) kurulmadan Flex UYGULANMAYACAK.
+  - **YENİDEN DEĞERLENDİRME KOŞULU:** yalnızca launch SONRASI, eğer zaten
+    arka planda çalışan bir üretim akışı ortaya çıkarsa (ör. lazy açıklama
+    üretimi, toplu deste yenileme gibi kullanıcının o anda ekranda
+    beklemediği bir akış) — o zaman Flex o akış için tekrar masaya
+    yatırılabilir. Mevcut senkron PDF→kart akışı için gündemde DEĞİL.
 
 ## Kurallar / Yapma
 - Yeni bir ekran eklerken renk/tipografi/spacing'i elle kodlama — her zaman

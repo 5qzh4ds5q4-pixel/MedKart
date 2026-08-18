@@ -272,12 +272,32 @@ prompt metnini değiştirmiyor, cache sınırını kodda görünür kılıyor;
 Aynı commit. Görseli `contents`'in sonuna almak da cache'i açmadı — bu, sorunun
 görselin KONUMU değil VARLIĞI olduğunu kanıtladı. `ÖLÇÜLDÜ`
 
-### 4.5 ⚠️ "Flex service tier" — BU DENEME KOD TABANINDA YOK
+### 4.5 Gemini "Flex" service tier — DEĞERLENDİRİLDİ VE REDDEDİLDİ
 
-`service_tier` / `serviceTier` araması `lib/`, `supabase/`, `test/`, `tool/`
-genelinde **HİÇBİR SONUÇ** vermedi. (`Flex` / `flex` eşleşmeleri Flutter'ın
-layout widget'ları.) CLAUDE.md'de de geçmiyor, `git log`'da da yok.
-**Böyle bir deneme yapıldıysa bu depoda iz bırakmamış.** `KOD OKUMASIYLA DOĞRULANDI`
+> **DÜZELTME (2026-08-18, birleştirme sırasında):** bu bölüm önce "bu deneme
+> kod tabanında YOK" diyordu. **O ifade YANLIŞTI.** Rapor yazılırken yerel
+> `main` uzak depodan GERİDEYDİ (`dd6209f`); kullanıcının 2026-08-17 23:38'de
+> attığı `7e92425` — *"CLAUDE.md: responseSchema doğrulaması + Flex service
+> tier kararını belgele"* — henüz `fetch` edilmemişti. Arama gerçekten sonuç
+> vermedi, ama sebebi denemenin yapılmamış olması değil, deponun eksik
+> olmasıydı. Ders: "grep bulamadı" ≠ "yok"; önce `git fetch`.
+
+**Ne denendi:** `serviceTier: "FLEX"` (istek gövdesinin EN ÜST seviyesinde,
+`generationConfig` içinde DEĞİL) maliyet kaldıracı olarak incelendi.
+
+**Bulgu (kod okumasıyla, canlı deneme YAPILMADAN):**
+- Kart üretimi tamamen **senkron/kullanıcı-bekletmeli**: `PdfImportScreen`
+  öğrenciyi ilerleme ekranında tutuyor (`PopScope(canPop: !_running)`,
+  "Bu pencereyi açık tut."); arka plan kuyruğu/bildirim mekanizması YOK —
+  sekme kapanırsa iş durur.
+- Tek istek timeout'u sabit **120 sn** (`GeminiTransport.defaultRequestTimeout`)
+  ve timeout'lar **bilinçli olarak yeniden denenmiyor** (çift faturalama riski).
+- Paralellik (`concurrency: 4`) Flex'in gecikmesine yapısal olarak uygun ama
+  120 sn'lik sabit tavan bunu geçersiz kılıyor.
+
+**Neden reddedildi:** Flex'in 1-15 dakikalık belirsiz gecikmesi bu mimariyle
+uyumsuz. Yeniden değerlendirme koşulu CLAUDE.md "Bilinmeyen / Henüz
+Kararlaştırılmamış" bölümünde. `KOD OKUMASIYLA DOĞRULANDI` (commit `7e92425`)
 
 ### 4.6 ⚠️ "Hibrit OCR (görselsiz varsayılan)" — BU HÂLİYLE YOK
 
@@ -390,8 +410,13 @@ Karıştırılmaması gereken ayrı enum: `CardPriority { oncelikli, arkaPlan }`
   bir ARRAY'in tek `items` şeması olabilir, pozisyon başına farklı tip
   verilemez. Bu yüzden bool/int de STRING isteniyor (`"true"`, `"12"`);
   ayrıştırıcı native tipleri de kabul ediyor, şema ileride gevşerse kod değişmez.
-- `minItems` / `maxItems` **BİLEREK YOK** — nested ARRAY'de kabul edildiği canlı
-  doğrulanamamıştı ve reddedilseydi TÜM istekler 400 ile ölürdü.
+- **Şemanın KENDİSİ artık CANLI DOĞRULANMIŞ** (commit `7e92425`): 2026-08-17
+  context-caching ölçümleri gerçek Gemini çağrılarıyla yapıldı ve bu şema her
+  seferinde kabul edildi — reddedilseydi 400 dönerdi. Bu oturumdaki 80 A/B
+  çağrısı da aynı şemayla geçti. `ÖLÇÜLDÜ`
+- `minItems` / `maxItems` **BİLEREK YOK** — 2026-08-04'te nested ARRAY'de kabul
+  edildiği canlı doğrulanamamıştı (kredi yoktu) ve reddedilseydi TÜM istekler
+  400 ile ölürdü. **O engel artık yok**, denenebilir; henüz denenmedi.
 - **Şema, eleman SAYISINI, SIRASINI ve ANLAMINI hiç doğrulamıyor.** Tek güvence
   prompt metni + `flashcardFromCompactItem`'ın toleransı (asla fırlatmaz, bozuk
   kartı sessizce atlar). `KOD OKUMASIYLA DOĞRULANDI`
@@ -527,7 +552,11 @@ bildirimiyle kalibre edildiği için önce sahibine sorulmalı.
 
 Rapor talebindeki üç önerme kanıtla örtüşmedi:
 
-1. **"Flex service tier denemesi"** — bu kod tabanında hiçbir izi yok (§4.5).
+1. ~~**"Flex service tier denemesi"** — bu kod tabanında hiçbir izi yok.~~
+   **BU DÜZELTMENİN KENDİSİ YANLIŞTI, geri alındı (§4.5).** Deneme gerçekten
+   yapılmış ve REDDEDİLMİŞ; kanıt uzak depodaki `7e92425` commit'indeydi,
+   yerel `main` o sırada geride olduğu için arama boş döndü. Önermede haklı
+   olan sendin.
 2. **"Hibrit OCR (görselsiz varsayılan)"** — OCR entegrasyonu yok; en yakın şey
    el yazısı anahtarı ve onun varsayılanı AÇIK (§4.6).
 3. **"Örtüşme bugün 3 canlı örnekle tespit edildi"** — bu konuşmada böyle bir
