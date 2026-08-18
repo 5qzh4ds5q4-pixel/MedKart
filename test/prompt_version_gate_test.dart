@@ -45,11 +45,17 @@ void main() {
       // v26 HATALI sürümdü (güncellik dili tavsiyesini yanlışlıkla
       // kaldırmıştı) — kabul EDİLMEMELİ.
       expect(isCacheablePromptVersion('v26'), isFalse);
+      // 2026-08-18: eşik 27 -> 30 (ornekTabanliKartKurali kart KÜMESİNİ
+      // değiştiriyor, v27/v28 kayıtları eksik set servis eder).
+      expect(isCacheablePromptVersion('v27'), isFalse);
+      expect(isCacheablePromptVersion('v28'), isFalse);
+      // v29 hiç yayınlanmadı (denenip geri alınan systemInstruction denemesi).
+      expect(isCacheablePromptVersion('v29'), isFalse);
     });
 
     test('eşik ve üstü kabul edilir', () {
-      expect(isCacheablePromptVersion('v27'), isTrue);
-      expect(isCacheablePromptVersion('v28'), isTrue);
+      expect(isCacheablePromptVersion('v30'), isTrue);
+      expect(isCacheablePromptVersion('v31'), isTrue);
       expect(isCacheablePromptVersion('v999'), isTrue);
     });
 

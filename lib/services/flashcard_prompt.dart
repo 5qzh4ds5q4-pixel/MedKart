@@ -39,12 +39,20 @@ import '../models/flashcard.dart';
 /// gerçekten değiştiren bir kural eklediğinde ya da değiştirdiğinde. Salt
 /// biçim/maliyet/sıralama değişikliğinde ARTIRMA.
 ///
-/// **ŞU ANKİ DEĞER NEDEN 27:** kart metnini etkileyen en yeni kural
-/// [kaynakReferansiGizlemeKurali]'nin DOĞRU hâli v27'de geldi (v26 hatalıydı:
-/// [guncellikDiliYasagiKurali]'ndaki kaynağa atıf tavsiyesini yanlışlıkla
-/// kaldırmıştı, bkz. o kuralın TARİHÇE notu). v27'den eski kartlar "slayta
-/// göre" ifadelerini gizlemiyor ve tedavi/kılavuz istisnasını taşımıyor.
-const int kMinCacheablePromptVersion = 27;
+/// **ŞU ANKİ DEĞER NEDEN 30 (2026-08-18'de 27'den yükseltildi):** v30'da
+/// [ornekTabanliKartKurali] eklendi ve bu kural üretilen kart KÜMESİNİ
+/// değiştiriyor — tanımının yanında somut örnek verilen her kavram artık EK
+/// bir tanıma/uygulama kartı doğuruyor. v27/v28 ile üretilmiş bir kayıt bu
+/// kartları HİÇ taşımaz, yani eksik bir set servis eder.
+///
+/// Önceki gerekçe (tarihçe olarak duruyor): eşik 27'ye, kart metnini etkileyen
+/// [kaynakReferansiGizlemeKurali]'nin DOĞRU hâli v27'de geldiği için
+/// çekilmişti (v26 hatalıydı: [guncellikDiliYasagiKurali]'ndaki kaynağa atıf
+/// tavsiyesini yanlışlıkla kaldırmıştı, bkz. o kuralın TARİHÇE notu).
+///
+/// Bu yükseltmenin BUGÜNKÜ PRATİK MALİYETİ SIFIR: canlı önbellekteki 6 kaydın
+/// en yenisi v24, yani zaten hiçbiri 27 eşiğini de geçmiyordu.
+const int kMinCacheablePromptVersion = 30;
 
 /// `'v27'` → `27`. Sürüm yoksa/çözülemiyorsa `null` (çağıran taraf bunu "en
 /// eski" sayar). Sunucu tarafındaki `pdf-cache` fonksiyonunda AYNI mantığın
@@ -62,12 +70,19 @@ bool isCacheablePromptVersion(String? version) {
   return n != null && n >= kMinCacheablePromptVersion;
 }
 
-// v29 (statik bloğun `systemInstruction`'a taşınması) DENENDİ, canlı ölçümde
-// hiçbir kazanç vermediği görüldü ve GERİ ALINDI — gönderilen prompt metni
-// yine v28 ile birebir aynı, o yüzden sürüm de v28'de kaldı. Bölme
-// ([buildPageSystemInstruction]/[buildPageUserContent]) korundu: prompt METNİ
-// değişmiyor, yalnızca cache sınırı kodda görünür hale geldi.
-const String kPromptVersion = 'v28';
+// v29 ATLANDI — BİLİNÇLİ, YENİDEN KULLANMA. O numara 2026-08-17'de statik
+// bloğun `systemInstruction`'a taşınması denemesinde KULLANILDI (canlı ölçüm
+// yapıldı, kazanç çıkmadı, değişiklik GERİ ALINDI ve sürüm v28'de kaldı).
+// Aynı numarayı farklı bir anlamla tekrar kullanmak `pdf_cache.prompt_version`
+// sütununu ikircikli hale getirirdi, o yüzden v28'den doğrudan v30'a geçildi.
+// Bölme ([buildPageSystemInstruction]/[buildPageUserContent]) o denemeden
+// KALDI: prompt METNİNİ değiştirmiyor, yalnızca cache sınırını kodda görünür
+// kılıyor.
+//
+// v30 (2026-08-18): [ornekTabanliKartKurali] eklendi — HER İKİ YOL. İÇERİK
+// kuralı: tanımın yanında somut örnek verilen kavramlarda artık EK bir
+// tanıma/uygulama kartı üretiliyor.
+const String kPromptVersion = 'v30';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -96,6 +111,31 @@ GÜÇLÜ kart (BUNU YAP — aynı bilgiyi klinik vakaya dönüştürüyor):
 Soru: "40 yaşında çiftçi hastada 3 haftadır süren ateş, terleme ve eklem ağrısı var. Kırsal bölgede yaşayan akrabasından aldığı taze keçi peyniri düzenli tükettiği öğreniliyor. Kan kültüründe hangi etken üremesi beklenir?" Cevap: "Brucella (Bruselloz)"
 
 Sayfada klinik/patolojik bir ilişki varsa (kırık-sinir, bulaş yolu-hastalık, tablo satırı gibi), HER ZAMAN güçlü kart formatını tercih et — zayıf format yalnızca gerçekten başka çıkarım yapılamayan, salt isimlendirme bilgisinde kabul edilebilir.''';
+
+/// Tanımın YANINDA somut örnek verilen kavramlar için, tanım kartına EK bir
+/// tanıma/uygulama kartı ürettirir (2026-08-18, kullanıcı talimatı, HER İKİ
+/// YOL, v30'da eklendi).
+///
+/// [sinavTipiKurali] İLE ÖRTÜŞEBİLİR ama AYNI DEĞİL: o kural KLİNİK/PATOLOJİK
+/// ilişkiler için hasta senaryosu ister; bu kural kaynakta ZATEN VERİLMİŞ
+/// somut örnekler için (klinik olsun olmasın — mutasyon adı, ilaç adı, tür
+/// adı...) tanıma/uygulama kartı ister. Klinik bir örnekte ikisi aynı kartta
+/// buluşabilir; bu çakışma BİLEREK ARBİTRE EDİLMEDİ (prompt'a "ikisinden
+/// birini seç" gibi bir hakem cümlesi eklenmedi) — v26'da iki kuralı
+/// "tutarlı hale getirme" girişiminin yanlış çıktığı vaka hatırlanarak,
+/// gerçek çıktıda fazlalık görülmeden kural eklenmedi. Çıktıda ikiz kart
+/// görürsen önce ÖLÇ, sonra hakem cümlesi ekle.
+///
+/// SON MADDE EN KRİTİĞİ: kaynakta örnek yoksa bu kart tipi ÜRETİLMEZ —
+/// [kaynakSadakatiKurali] bu kuralın ÜSTÜNDEDİR, uydurulmuş bir "örnek"
+/// kaynak sadakatinin ihlalidir.
+const String ornekTabanliKartKurali = '''
+ÖRNEK TABANLI KART (tanıma/uygulama — tanım kartına EK, onun YERİNE DEĞİL):
+- Kaynakta bir kavramın TANIMININ YANINDA somut örnek(ler) veriliyorsa (ör. "neoantijen: X mutasyonu, Y mutasyonu"), o kavram için tanım kartına EK OLARAK bir örnek/uygulama kartı da üret. Tanım kartını bunun yerine geçirme — ikisi de olsun.
+- Örnek kart düz tanımı TEKRAR SORMAZ. Verilen örneği ya da örneğe benzer YENİ bir senaryoyu kullanarak öğrencinin kavramı TANIYABİLDİĞİNİ veya UYGULAYABİLDİĞİNİ test eder.
+  YANLIŞ (tanımın tekrarı): "Neoantijen örnekleri nelerdir?"
+  DOĞRU (uygulama): "Bir tümör hücresinde KRAS geninde yeni bir mutasyon saptanıyor ve bu mutasyon sonucu oluşan protein daha önce bağışıklık sisteminin hiç karşılaşmadığı bir dizi taşıyor. Bu protein dizisi ne olarak adlandırılır?"
+- KAYNAKTA KAVRAMIN YANINDA HİÇ SOMUT ÖRNEK YOKSA BU KART TİPİNİ ÜRETME. Var olmayan bir örneği UYDURMA — bu, kaynak sadakati kuralının ihlalidir ve "örnek kart üretmemek"ten çok daha ciddi bir hatadır.''';
 
 /// Cevapların açıklayıcılığı için ortak kural; hem [buildGeneralPrompt] hem
 /// [buildPagePrompt] tarafından paylaşılır.
@@ -488,6 +528,8 @@ $sinavTipiKurali
 
 $icerikKalitesiOrnegi
 
+$ornekTabanliKartKurali
+
 $oncelikKurali
 
 $terminolojiStandardiKurali
@@ -579,6 +621,8 @@ $zorlukKurali
 $sinavTipiKurali
 
 $icerikKalitesiOrnegi
+
+$ornekTabanliKartKurali
 
 $oncelikKurali
 
