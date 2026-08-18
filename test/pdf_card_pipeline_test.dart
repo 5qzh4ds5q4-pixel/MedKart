@@ -288,4 +288,84 @@ void main() {
     // İki sayfa → iki akış olayı, her biri 1 kart.
     expect(streamed, [1, 1]);
   });
+
+  group('emptyResultPages (modele gitti, [] döndü)', () {
+    test(
+      "boş dizi dönen sayfa emptyResultPages'e girer; failedPages ve "
+      "emptyTextPages'e KARIŞMAZ",
+      () async {
+        final result = await pipeline.run(
+          [_page(1), _page(2), _page(3)],
+          // s.2 modele gider ama "test edilecek bilgi yok" der.
+          generate: (p) async => p.page == 2 ? <Flashcard>[] : [_card('${p.page}a')],
+        );
+
+        expect(result.emptyResultPages, [2]);
+        expect(result.failedPages, isEmpty, reason: 'boş dizi bir HATA değil');
+        expect(
+          result.emptyTextPages,
+          isEmpty,
+          reason: 's.2 modele GİTTİ, ön-filtrede elenmedi',
+        );
+        expect(result.cardCount, 2);
+      },
+    );
+
+    test('boş dizi dönen sayfa için onCards çağrılmaz', () async {
+      final batches = <int>[];
+      await pipeline.run(
+        [_page(1), _page(2)],
+        generate: (p) async => p.page == 2 ? <Flashcard>[] : [_card('a')],
+        onCards: (cards) => batches.add(cards.length),
+      );
+
+      expect(batches, [1]);
+    });
+
+    test("modele HİÇ gitmeyen sayfa emptyResultPages'e GİRMEZ", () async {
+      final result = await pipeline.run(
+        // Metni de görüntüsü de olmayan sayfa ön-filtrede elenir.
+        [_page(1), _page(2, text: '')],
+        generate: (p) async => [_card('a')],
+      );
+
+      expect(result.emptyTextPages, [2]);
+      expect(
+        result.emptyResultPages,
+        isEmpty,
+        reason: 'faturalanmayan sayfa "kart üretmeye değmez bulundu" sayılamaz',
+      );
+    });
+
+    test(
+      'billedPages boş dizi oranının paydası: ön-filtre ve hata düşülür',
+      () async {
+        final result = await pipeline.run(
+          [_page(1), _page(2), _page(3, text: ''), _page(4)],
+          generate: (p) async {
+            if (p.page == 1) throw const FlashcardGenerationException('bozuk');
+            if (p.page == 2) return <Flashcard>[];
+            return [_card('a')];
+          },
+        );
+
+        expect(result.totalPages, 4);
+        expect(result.failedPages, [1]);
+        expect(result.emptyTextPages, [3]);
+        expect(result.emptyResultPages, [2]);
+        // Modele gerçekten gidip sonuç dönen: s.2 ve s.4.
+        expect(result.billedPages, 2);
+      },
+    );
+
+    test('sonuç listesi sıralı gelir', () async {
+      final result = await pipeline.run(
+        [for (var i = 1; i <= 5; i++) _page(i)],
+        generate: (p) async =>
+            p.page.isEven ? <Flashcard>[] : [_card('${p.page}')],
+      );
+
+      expect(result.emptyResultPages, [2, 4]);
+    });
+  });
 }

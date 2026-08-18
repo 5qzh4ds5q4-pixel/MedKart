@@ -21,6 +21,7 @@ class PipelineResult {
     required this.totalPages,
     required this.cards,
     required this.emptyTextPages,
+    required this.emptyResultPages,
     required this.failedPages,
     this.quotaExhausted = false,
     this.quotaMessage,
@@ -32,6 +33,25 @@ class PipelineResult {
   /// Metin çıkarılamayan (görsel ağırlıklı) sayfa numaraları — atlanmadı,
   /// işaretlendi.
   final List<int> emptyTextPages;
+
+  /// Modele GİDEN ama boş dizi (`[]`) dönen sayfa numaraları — yani modelin
+  /// "burada test edilecek bilgi yok" dediği sayfalar (kapak/ajanda/geçiş/
+  /// kapanış slaytı, ders-dışı içerik; bkz. flashcard_prompt.dart'taki "boş
+  /// dizi döndür" kuralı).
+  ///
+  /// **Diğer iki listeyle KARIŞTIRMA — üçü ayrı olaydır:**
+  /// - [emptyTextPages]: modele HİÇ GİTMEDİ (metin de görüntü de yoktu,
+  ///   ön-filtrede elendi) → maliyet YOK.
+  /// - [emptyResultPages]: modele GİTTİ, faturalandı, `[]` döndü → maliyet
+  ///   VAR, kart YOK. Bu bir HATA DEĞİL, beklenen ve doğru davranıştır.
+  /// - [failedPages]: modele gitti ama istisna fırlattı (ağ/parse/timeout)
+  ///   → kart yok, sebep teknik.
+  ///
+  /// Bu liste 2026-08-18'de eklendi: öncesinde `[]` dönen sayfa hiçbir yerde
+  /// kaydedilmiyordu ([processedPages]'e sessizce başarılı sayılıyordu), bu
+  /// yüzden "sayfaların yüzde kaçı kart üretmeye değmez bulunuyor" sorusu
+  /// ancak `pdf_cache`'teki `sourcePage` boşluklarından TAHMİN edilebiliyordu.
+  final List<int> emptyResultPages;
 
   /// Denemelere rağmen işlenemeyen sayfa numaraları.
   final List<int> failedPages;
@@ -45,6 +65,13 @@ class PipelineResult {
 
   int get cardCount => cards.length;
   int get processedPages => totalPages - failedPages.length;
+
+  /// Modele gerçekten gönderilen sayfa sayısı (ön-filtrede elenenler ve
+  /// hataya düşenler hariç) — [emptyResultPages] oranının DOĞRU paydası.
+  /// Toplam sayfaya bölmek yanıltıcı olurdu: modele hiç gitmemiş sayfalar
+  /// "kart üretmeye değmez bulundu" sayılamaz.
+  int get billedPages =>
+      totalPages - emptyTextPages.length - failedPages.length;
 }
 
 /// Sayfa bazında, sınırlı paralellikle kart üreten pipeline.
@@ -86,6 +113,7 @@ class PdfCardPipeline {
     final total = pages.length;
     final allCards = <Flashcard>[];
     final emptyText = <int>[];
+    final emptyResult = <int>[];
     final failed = <int>[];
     var completed = 0;
 
@@ -130,7 +158,18 @@ class PdfCardPipeline {
               c.sourcePage != null ? c : c.copyWith(sourcePage: page.page),
           ];
           allCards.addAll(stamped);
-          if (stamped.isNotEmpty) onCards?.call(stamped);
+          if (stamped.isNotEmpty) {
+            onCards?.call(stamped);
+          } else {
+            // Modele gitti, faturalandı, `[]` döndü. HATA DEĞİL — kuralın
+            // beklediği davranış (kapak/ajanda/kapanış slaytı vb.). Ama
+            // ölçülebilsin diye ayrı kaydediliyor; failedPages'e YAZMA.
+            emptyResult.add(page.page);
+            debugPrint(
+              '[PIPELINE s.${page.page}] model boş dizi döndürdü '
+              '(kart üretmeye değmez bulundu)',
+            );
+          }
         } on FlashcardGenerationException catch (e) {
           failed.add(page.page);
           // SEBEP LOGU: failedPages yalnızca sayfa numarası taşıyor; sebep
@@ -170,6 +209,7 @@ class PdfCardPipeline {
     }
 
     emptyText.sort();
+    emptyResult.sort();
     failed.sort();
     allCards.sort((a, b) => (a.sourcePage ?? 0).compareTo(b.sourcePage ?? 0));
 
@@ -177,6 +217,7 @@ class PdfCardPipeline {
       totalPages: total,
       cards: allCards,
       emptyTextPages: emptyText,
+      emptyResultPages: emptyResult,
       failedPages: failed,
       quotaExhausted: quotaHit,
       quotaMessage: quotaMessage,

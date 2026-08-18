@@ -10,6 +10,7 @@ import '../services/flashcard_prompt.dart';
 import '../services/gemini_service.dart';
 import '../services/pdf_card_pipeline.dart';
 import '../services/pdf_cache_service.dart';
+import '../services/pipeline_metrics_service.dart';
 import '../state/flashcard_store.dart';
 import '../utils/breakpoints.dart';
 import '../widgets/content_shell.dart';
@@ -80,13 +81,14 @@ class _PdfImportScreenState extends State<PdfImportScreen> {
       });
     }
 
+    final modelVersion = activeAiProvider == AiProvider.deepseek
+        ? DeepSeekService.model
+        : GeminiService.model;
+
     // Yalnızca temiz (kota hatasıyla yarıda kalmamış) tam-PDF çalıştırmaları
     // önbelleğe yazılır — best-effort, kullanıcıyı hiç beklemez/etkilemez.
     final hash = widget.pdfHash;
     if (hash != null && !result.quotaExhausted && result.cards.isNotEmpty) {
-      final modelVersion = activeAiProvider == AiProvider.deepseek
-          ? DeepSeekService.model
-          : GeminiService.model;
       unawaited(
         PdfCacheService().save(
           hash,
@@ -96,6 +98,22 @@ class _PdfImportScreenState extends State<PdfImportScreen> {
         ),
       );
     }
+
+    // Ölçüm: önbellek yazımının AKSİNE koşulsuz — daraltılmış çalıştırmalar
+    // (hash null), hiç kart üretmeyen çalıştırmalar ve kotayla kesilenler de
+    // kaydedilir. pdf_cache'in sistematik olarak kaçırdığı durumlar tam da
+    // bunlar; ölçümün kaçırmaması gerekiyor (bkz. migration yorumu).
+    // Vision durumu sayfalardan türetiliyor — ekrana yeni parametre eklemeye
+    // gerek yok (el yazısı anahtarı kapalıyken hiçbir sayfada görüntü olmaz).
+    unawaited(
+      PipelineMetricsService().record(
+        result,
+        pdfHash: hash,
+        visionEnabled: widget.pages.any((p) => p.hasImage),
+        modelVersion: modelVersion,
+        promptVersion: kPromptVersion,
+      ),
+    );
   }
 
   @override
