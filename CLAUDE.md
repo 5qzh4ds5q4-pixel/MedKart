@@ -88,7 +88,7 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > parçası 0. pozisyonda ve her sayfada değişiyor; görsel sırası BİLİNÇLİ
 > OLARAK değiştirilmedi (canlı A/B ister). Bkz. "Context caching" bölümü;
 > test 675→**695**, `flutter analyze` baseline 90→**92** (DÜZELTME 2026-08-18:
-> bu sayı eskidi, proje geneli baseline ölçüldü ve **120** — artış 10 Ağustos
+> bu sayı eskidi, proje geneli baseline ölçüldü ve **120** (2026-08-19'da yeniden ölçüldü: **130** — artış yine `tool/` script'lerinden) — artış 10 Ağustos
 > sonrası eklenen `tool/` script'lerinden geliyor, bu oturumun değişiklikleri
 > 0 yeni uyarı ekledi) (yalnızca yeni dosyadaki `avoid_print`). Aynı günün
 > ilerleyen saatlerinde Gemini'ın
@@ -106,7 +106,16 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > çıktı (P(sinav|zor)=%100, beş prompt sürümünde ayrı ayrı) ve
 > `zorlukKurali`'nin tek bağımsız dalı olan "formül/sayısal hesap" 733 kartta
 > HİÇ tetiklenmemişti; prompt'a DOKUNULMADI, bulgu kaydı olarak yeni bir
-> bölüme yazıldı (bkz. "`zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI").
+> bölüme yazıldı (bkz. "`zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI"); aynı
+> gün `CardFilter.examOnly`'nin ARAYÜZ tarafı incelenirken o bölümdeki bir
+> sayı YANLIŞ çıktı (predicate `||` iken `&&` sanılmıştı: Sınav Modu 129 değil
+> **607/733** kart tutuyordu) — düzeltme kalıcı kayıt olarak bölümün içine
+> işlendi, ve aynı incelemede switch'in "Zor" zorluk çipi seçiliyken kart
+> kümesine ETKİSİNİN SIFIR olduğu ölçülünce kullanıcı talimatıyla
+> **"Sınav Modu" switch'i `StudyScreen`'den TAMAMEN KALDIRILDI**
+> (`CardFilter.examOnly` alanı modelde bilinçli olarak BIRAKILDI, üretim/
+> etiketleme katmanına dokunulmadı, 737→734/734 test yeşil — bkz. "Sınav Modu
+> switch'i KALDIRILDI").
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
@@ -911,7 +920,9 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
   üretilmeli, tutarsız atlanmamalı.
 - (DÜZELTME) `priority: arkaPlan` etiketli kartların **üretimi engellenmez**
   — bağlam/tanım niteliğindeki bilgi yine kart olarak üretilir, sadece bu
-  etiketi alır ve Sınav Modu bunları gizler. Yalnızca Yol B'nin genel
+  etiketi alır (2026-08-19'a kadar Sınav Modu switch'i bunları gizliyordu;
+  switch kaldırıldı ama etiket ÜRETİLMEYE DEVAM EDİYOR — `dailyQueue`
+  sıralaması ve Öncelikli Mod hâlâ kullanıyor). Yalnızca Yol B'nin genel
   prompt'unda ayrı bir sınır var: "en fazla 1-2 kart temel tanım düzeyinde
   olabilir" (saf tanım/hatırlama kartı SAYISINI kısıtlar, arkaPlan
   etiketiyle karıştırılmamalı).
@@ -1096,11 +1107,28 @@ sorununun sayısal izi (bkz. "Devam Eden İş" 0.7).
 - **Zorluk filtresindeki "Zor" çipi, fiilen "sınav tipi" filtresiyle AYNI kart
   kümesini veriyor** (`card_list_screen.dart` `_FilterBar`). İkisini yan yana
   sunmak kullanıcıya iki ayrı seçenek gibi görünüyor ama değil.
-- **Sınav Modu** (`CardFilter.examOnly` = `sinav` ∧ `oncelikli`) ölçülen
-  **129 kart / %17,6**. Ayrıca TÜM `sinav` kartlar zaten `oncelikli`
-  (0 tanesi `arkaPlan`), yani öncelik koşulu burada HİÇBİR ŞEY elemiyor —
-  Sınav Modu fiilen "tüm zor kartlar + `orta`nın %9'u".
-- `arkaPlan` etiketli 126 kartın (%17,2) TAMAMI `temel` tarafında.
+- **🔴 DÜZELTME (2026-08-19, aynı gün) — Sınav Modu ölçümü İLK YAZILDIĞINDA
+  YANLIŞTI, sonra özellik KALDIRILDI.** Kalıcı kayıt olarak bırakılıyor:
+  - **Hata:** `card_filter.dart:71`'deki predicate
+    `!(card.isExamType || card.priority == CardPriority.oncelikli)` bir
+    **VEYA**; ilk yazımda "`sinav` ∧ `oncelikli`" diye VE olarak okundu ve
+    "Sınav Modu = **129 kart / %17,6**" denildi. **YANLIŞTI.**
+  - **Doğrusu:** `sinav` **VEYA** `oncelikli` kalır → fiilen "arka plan
+    kartlarını gizle". Ölçülen: **kalan 607 kart / %82,8**, gizlenen
+    **126 kart / %17,2** (104 `kolay|temel|arkaPlan` + 22
+    `orta|temel|arkaPlan` — yani `arkaPlan` etiketli 126 kartın TAMAMI, ki
+    hepsi zaten `temel` tarafında). Filtre havuzu DARALTMIYORDU, yalnızca
+    %17,2'sini kırpıyordu.
+  - **Hatanın kaynağı:** `card_filter.dart:38`'deki doc yorumu ("yalnızca
+    `CardType.sinav` kartlar **ve** `CardPriority.oncelikli` işaretli temel
+    kartlar kalır") — buradaki "ve" BİRLEŞİM anlamında (iki grup da kalır),
+    kesişim değil. Türkçe doc yorumu okurken bu tuzağa dikkat.
+  - **Yan bulgu — `isExamType` terimi ÖLÜYDÜ:** `sinav` olup `arkaPlan` olan
+    kart 733'te **0** (yani `sinav ⊂ oncelikli`). Predicate'ten
+    `card.isExamType ||` silinse filtre BİREBİR aynı kümeyi verirdi. Yani
+    "Sınav Modu" bir sınav tipi filtresi değil, bir ÖNCELİK filtresiydi.
+  - **✅ SONUÇ: Sınav Modu switch'i 2026-08-19'da UI'dan KALDIRILDI**, bkz.
+    aşağıdaki "Sınav Modu switch'i kaldırıldı" bölümü.
 
 ### ⚠️ "DÜZELTMEDEN" ÖNCE OKU
 Bu ölçüm bir SORUN TESPİTİDİR, çözüm reçetesi DEĞİL. İki kuralı
@@ -1135,6 +1163,71 @@ dalı ve vinyet-dışı zorluk ölçütleri güçlendirilmeli), yoksa "sinav"ın
   `select=hash,prompt_version,created_at,hit_count,generated_cards` ile
   anon key üzerinden çek (bkz. "Maliyet Optimizasyonu" — tablo anon okumaya
   BİLİNÇLİ olarak açık).
+
+## Sınav Modu switch'i KALDIRILDI (2026-08-19)
+Çalışma ekranındaki (`StudyScreen`) "Sınav Modu" switch'i (`_ExamModeBar`)
+tamamen kaldırıldı. **Bu bir UI kaldırma işidir; kart üretimi/etiketleme
+katmanına HİÇ dokunulmadı.**
+
+**GEREKÇE (ölçüldü, bkz. yukarıdaki çakışma bölümü):**
+- Kullanıcı aynı ihtiyacı zaten iki yerden karşılıyor: kart listesindeki
+  **"Zor" zorluk çipi** (`card_list_screen.dart` `_FilterBar`) ve ayrı
+  **"Deneme Sınavı"** akışı (`ExamSimSetupScreen`, sidebar'da kendi ikonu).
+- **"Zor" çipi seçiliyken switch'in kart kümesine etkisi SIFIRDI.** `zor ⊂
+  sinav ⊂ oncelikli` olduğu için (733 kartta 0 istisna) "Zor" seçiliyken
+  switch açık da kapalı da aynı 97 kart geliyordu — kullanıcı bir kontrolü
+  çeviriyor, ekranda hiçbir şey değişmiyordu.
+- Ad, mevcut **"Deneme Sınavı"** özelliğiyle çakışıyordu (biri süreli/puanlı
+  gerçek sınav simülasyonu, diğeri bir kart filtresi) ve kart üzerindeki
+  `ExamTypeChip` rozetiyle (label: `'sınav tipi'`) karışıyordu — switch
+  açıkken kalan 607 kartın 478'i o rozeti taşımıyordu.
+- Predicate'in `isExamType` yarısı zaten ölüydü (bkz. düzeltme notu), yani
+  switch fiilen "arka plan kartlarını gizle"den ibaretti.
+
+**NE KALDIRILDI (`lib/screens/study_screen.dart`):** `_ExamModeBar` widget'ı,
+`bool _examMode` state'i, `_toggleExamMode` metodu ve `mainColumn`'daki
+kullanımı (+ altındaki `SizedBox`). `_effectiveFilter` artık
+`examOnly: _examMode || base.examOnly` DEĞİL, sadece `examOnly: base.examOnly`
+— yani dışarıdan gelen filtre hâlâ aktarılıyor, ekranın kendisi bu alanı
+AÇMIYOR.
+
+**NE KALDIRILMADI (bilinçli):**
+- **`CardFilter.examOnly` alanı ve `withExamOnly` metodu MODELDE DURUYOR.**
+  Kullanıcının açık talimatı: "şimdilik kaldırma, sadece UI'dan
+  eriş(il)emez hale getir." Bugün hiçbir çağıran `examOnly: true`
+  göndermiyor, yani alan fiilen ölü ama API'si sağlam. Testleri de duruyor
+  (`card_filter_test.dart` 2 test, `flashcard_store_test.dart` 1 test) —
+  model davranışını koruyorlar, BOZULMADI.
+- **`isExamType` / `CardType.sinav` / `CardPriority` üretim tarafına HİÇ
+  DOKUNULMADI** — prompt (`sinavTipiKurali`, `oncelikKurali`), model
+  (`flashcard.dart`), şema ve kompakt biçim aynen duruyor. Kartlar hâlâ
+  `sinav`/`oncelikli` etiketleniyor; `ExamTypeChip` rozeti hâlâ görünüyor;
+  `dailyQueue` sıralaması ve Öncelikli Mod bu etiketleri hâlâ kullanıyor.
+- `_ToggleRow` (paylaşılan gövde) duruyor — tek kullananı artık
+  `_HandwrittenOnlyBar`. **`trailingLabel` parametresi ARTIK HEP null**
+  (o dal yalnızca `_ExamModeBar`'ın "N kart" pilini çiziyordu); ölü bir dal
+  ama analyze uyarı vermiyor, temizliği ayrı bir iş olarak bırakıldı.
+
+**TESTLER:** `test/study_screen_test.dart`'tan kaldırılan UI'ı test eden ÜÇ
+test silindi — "Sınav Modu sınav tipi + öncelikli temel kartları bırakır",
+"Sınav Modu ile birlikte çalışır (ikisi de uygulanır)", "Sınav Modu birleşik
+kuyrukta da uygulanır". Silinmelerinin sebebi hepsinin `find.text('N kart')`
+ile `_ExamModeBar`'ın trailing pilini okuması ve `Switch`'i konumuna göre
+(`.first`) tıklaması; artık var olmayan bir UI'yı test ediyorlardı. Konu
+filtresi kapsamı kaybolmadı (ayrı testleri zaten var). "Sadece Hocanın
+Favorileri" testindeki `find.byType(Switch).last` çağrısı ekranda tek switch
+kaldığı için değişmeden çalışıyor; yalnızca yanıltıcı hale gelen yorumu
+güncellendi. **Paket 737 → 734/734 yeşil**, `flutter analyze` değişen iki
+dosyada **0 YENİ uyarı** (kalan 2 uyarı baseline: `study_screen.dart:217`
+`use_build_context_synchronously` ve testteki `_deckB` adlandırması — ikisi de
+dokunulan satırlarda değil).
+
+**TARAYICIDA DOĞRULANMADI** — yalnızca `flutter test` + `flutter analyze` ile
+doğrulandı, gerçek tarayıcıda ekran görüntüsü ALINMADI.
+
+**BİR DAHA EKLEMEDEN ÖNCE:** çalışma ekranına yeni bir "havuzu daraltan"
+switch eklemek istersen önce yukarıdaki çakışma ölçümünü oku — zorluk çipi,
+kart tipi ve öncelik etiketi BAĞIMSIZ boyutlar DEĞİL, biri diğerini kapsıyor.
 
 ## Hata Yönetimi (`gemini_transport.dart` + `pdf_card_pipeline.dart` ile doğrulandı)
 - **Savunmasız cast bug'ı (çözüldü):** API cevabını `as List` ile cast etmeden
@@ -1189,10 +1282,9 @@ dalı ve vinyet-dışı zorluk ölçütleri güçlendirilmeli), yoksa "sinav"ın
   cevap, "Açıklamasını gör" ile açıklamalı hali; PDF export'ta ikisi de
   statik görünür. Yalnızca yeni üretilen kartlarda dolu, eski kartlar
   migrate edilmedi (`hasShortAnswer` boşsa eski tek-katmanlı davranışa düşer).
-- Sınav Modu: yalnızca `cardType: sinav` VE `priority: oncelikli` kartları
-  bırakan, `priority: arkaPlan` temel kartları gizleyen çalışma filtresi
-  (`CardFilter.examOnly`, yalnızca `StudyScreen`'de — `card_list_screen`'in
-  kendi filtre çubuğuna karıştırılmadı, bilinçli tasarım kararı)
+- ~~Sınav Modu (`CardFilter.examOnly` switch'i, `StudyScreen`)~~ —
+  **2026-08-19'da KALDIRILDI**, bkz. "Sınav Modu switch'i kaldırıldı".
+  Model alanı (`CardFilter.examOnly`) duruyor ama UI'dan erişilemiyor.
 - **"Kendini Test Et" MCQ pratik modu** — bkz. "MCQ — Kendini Test Et".
 - **"Hocanın Favorileri" (el yazısı/highlight kart) filtresi ve hızlı pratik
   modu** (2026-07-28) — bkz. ayrı bölüm "Hocanın Favorileri / En Zayıf Konu
@@ -1394,8 +1486,9 @@ iki hızlı pratik girişi. Hiç yeni AI çağrısı yapmaz, yalnızca zaten var
 "Bu tempoda sınava yetişemiyorsun" uyarısı ve ona bağlı, kullanıcının elle
 açtığı triage modu. Birbirine bağlı ama AYRI iki şey: uyarı salt bilgi verir,
 Öncelikli Mod ise kuyruk sırasını değiştirir. İkisi de HİÇBİR kartı gizlemez/
-silmez — Sınav Modu'ndan (`CardFilter.examOnly`, kart havuzunu daraltır) bu
-yönüyle temelden farklıdır.
+silmez — 2026-08-19'da kaldırılan Sınav Modu switch'inden
+(`CardFilter.examOnly`, kart havuzunu daraltıyordu) bu yönüyle temelden
+farklıydı; o switch artık yok, Öncelikli Mod duruyor.
 
 **Tempo uyarısı** (`SrsEngine.examPaceWarning` → `ExamPaceWarning` modeli,
 `srs_engine.dart`; kütüphane geneli sarmalayıcı `FlashcardStore.
@@ -2830,6 +2923,15 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
 - Zorluk ve kart tipini BAĞIMSIZ iki boyut varsayan yeni bir filtre/UI/istatistik
   tasarlama — ölçümde değiller (6 hücrenin 2'si yapısal olarak boş, zorluk
   filtresindeki "Zor" fiilen "sınav tipi" ile aynı kümeyi veriyor).
+- **Çalışma ekranına "Sınav Modu" switch'ini geri ekleme** — 2026-08-19'da
+  ölçümle fazlalık olduğu görülüp KALDIRILDI ("Zor" çipi seçiliyken etkisi
+  SIFIRDI, ayrıca "Deneme Sınavı" ile adı çakışıyordu). Bkz. "Sınav Modu
+  switch'i kaldırıldı". Havuzu daraltan YENİ bir switch eklemeden önce de
+  aynı ölçümü oku.
+- `CardFilter.examOnly` alanını/`withExamOnly`'yi modelden silme — switch
+  kaldırıldı ama alan ve testleri BİLİNÇLİ olarak duruyor (kullanıcı kararı).
+  Bugün hiçbir çağıran `true` göndermiyor; "ölü kod" diye temizlemeye
+  kalkmadan önce sor.
 - `kPromptVersion`'da v29'u kullanma — denenip geri alınmış bir numara, atlandı.
 - `emptyResultPages`'i `failedPages`'e karıştırma / hata gibi raporlama —
   modele gidip `[]` dönmek kuralın BEKLEDİĞİ davranış (kapak/ajanda/kapanış

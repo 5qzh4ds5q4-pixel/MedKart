@@ -49,17 +49,20 @@ class _StudyScreenState extends State<StudyScreen> {
   late StudySession _session;
   final FocusNode _focusNode = FocusNode();
   bool _showAnswer = false;
-  bool _examMode = false;
   bool _handwrittenOnly = false;
 
   /// Bu oturuma özel konu filtresi (kalıcı değil). Dışarıdan gelen
   /// [StudyScreen.filter] konu seçtiyse başlangıç değeri oradan alınır.
   late Set<String> _selectedTopics = {...(widget.filter?.topics ?? const {})};
 
-  /// Dışarıdan gelen deste filtresine (varsa) Sınav Modu, "Sadece Hocanın
-  /// Favorileri" ve oturuma özel konu seçimini ekler. Hepsi birlikte çalışır:
-  /// yalnızca o filtreden geçen kartlar arasından, seçili konu(lar)a uyanlar
-  /// kalır.
+  /// Dışarıdan gelen deste filtresine (varsa) "Sadece Hocanın Favorileri" ve
+  /// oturuma özel konu seçimini ekler. Hepsi birlikte çalışır: yalnızca o
+  /// filtreden geçen kartlar arasından, seçili konu(lar)a uyanlar kalır.
+  ///
+  /// NOT: [CardFilter.examOnly] burada yalnızca DIŞARIDAN gelen filtreden
+  /// aktarılır — 2026-08-19'da kaldırılan "Sınav Modu" switch'inden sonra bu
+  /// ekranda onu açan bir kontrol YOK. Alan modelde bilinçli olarak duruyor
+  /// (bkz. `card_filter.dart`), yalnızca UI'dan erişilemiyor.
   CardFilter? get _effectiveFilter {
     final base = widget.filter ?? const CardFilter();
     final filter = CardFilter(
@@ -67,7 +70,7 @@ class _StudyScreenState extends State<StudyScreen> {
       topics: _selectedTopics,
       minPage: base.minPage,
       maxPage: base.maxPage,
-      examOnly: _examMode || base.examOnly,
+      examOnly: base.examOnly,
       handwrittenOnly: _handwrittenOnly || base.handwrittenOnly,
       cardIds: base.cardIds,
     );
@@ -112,18 +115,9 @@ class _StudyScreenState extends State<StudyScreen> {
     return StudySession(cards);
   }
 
-  /// Sınav Modu değişince havuz küçülür/büyür; oturum bu yeni havuzla
-  /// baştan kurulur (SRS ilerlemesi etkilenmez, yalnızca bu oturumun kuyruğu).
-  void _toggleExamMode(bool value) {
-    setState(() {
-      _examMode = value;
-      _session = _buildSession();
-      _showAnswer = false;
-    });
-  }
-
-  /// "Sadece Hocanın Favorileri" değişince havuz küçülür/büyür; bkz.
-  /// [_toggleExamMode] — aynı mantık, ayrı bir boyut.
+  /// "Sadece Hocanın Favorileri" değişince havuz küçülür/büyür; oturum bu yeni
+  /// havuzla baştan kurulur (SRS ilerlemesi etkilenmez, yalnızca bu oturumun
+  /// kuyruğu).
   void _toggleHandwrittenOnly(bool value) {
     setState(() {
       _handwrittenOnly = value;
@@ -267,12 +261,6 @@ class _StudyScreenState extends State<StudyScreen> {
     final mainColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ExamModeBar(
-          value: _examMode,
-          cardCount: _session.total,
-          onChanged: _toggleExamMode,
-        ),
-        const SizedBox(height: AppTheme.space8),
         _HandwrittenOnlyBar(
           value: _handwrittenOnly,
           onChanged: _toggleHandwrittenOnly,
@@ -769,38 +757,15 @@ class _DashCard extends StatelessWidget {
   }
 }
 
-/// Çalışma ekranının üstünde sade bir Sınav Modu switch'i.
-///
-/// Açıkken yalnızca sınav tipi kartlar ve öncelikli temel kartlar havuzda
-/// kalır; kapalıyken tüm kartlar. Karmaşık bir ayar menüsüne gömülmez,
-/// tek satırlık switch olarak doğrudan burada durur.
-class _ExamModeBar extends StatelessWidget {
-  const _ExamModeBar({
-    required this.value,
-    required this.cardCount,
-    required this.onChanged,
-  });
-
-  final bool value;
-  final int cardCount;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ToggleRow(
-      icon: Icons.bolt,
-      title: 'Sınav Modu',
-      subtitle: '$cardCount kartlık klasik sınav deneyimi',
-      trailingLabel: '$cardCount kart',
-      value: value,
-      onChanged: onChanged,
-    );
-  }
-}
-
-/// "Sadece Hocanın Favorileri" switch'i — [_ExamModeBar] ile AYNI görsel dil
-/// (aynı yapı, yalnızca ikon/etiket farklı): açıkken yalnızca
+/// "Sadece Hocanın Favorileri" switch'i: açıkken yalnızca
 /// [Flashcard.isHandwritten] kartlar havuzda kalır.
+///
+/// 2026-08-19'a kadar bunun ÜSTÜNDE aynı görsel dili paylaşan bir "Sınav Modu"
+/// switch'i daha vardı ([CardFilter.examOnly]'yi açıyordu); ölçümle fazlalık
+/// olduğu görülüp kaldırıldı (kart listesindeki "Zor" zorluk çipi ve ayrı
+/// "Deneme Sınavı" akışı aynı ihtiyacı karşılıyor, üstelik "Zor" seçiliyken
+/// switch'in kart kümesine etkisi SIFIRDI). Buraya yeni bir havuz-daraltan
+/// switch eklemeden önce o ölçümü oku (bkz. CLAUDE.md).
 class _HandwrittenOnlyBar extends StatelessWidget {
   const _HandwrittenOnlyBar({required this.value, required this.onChanged});
 
@@ -820,7 +785,7 @@ class _HandwrittenOnlyBar extends StatelessWidget {
   }
 }
 
-/// [_ExamModeBar]/[_HandwrittenOnlyBar] paylaşılan gövdesi — ikon rozeti hep
+/// [_HandwrittenOnlyBar]'ın gövdesi — ikon rozeti hep
 /// AYNI mor tonda durur (durum GÖSTERGESİ değil, sabit marka vurgusu);
 /// durumu gösteren TEK şey Switch'in kendisi (kapalıyken gri, açıkken mor
 /// dolu). Satırın zemini de artık `primaryContainer`/amber ile DEĞİŞMİYOR —

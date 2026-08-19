@@ -378,62 +378,6 @@ void main() {
     expect(find.text('LAD tıkanırsa hangi bölge etkilenir?'), findsOneWidget);
   });
 
-  testWidgets(
-    'Sınav Modu sınav tipi + öncelikli temel kartları bırakır, arka planı çıkarır',
-    (tester) async {
-      final mixedCards = [
-        const Flashcard(
-          id: 's1',
-          question: 'Sınav tipi soru?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.sinav,
-          // Öncelik etiketinden bağımsız kalması gerektiğini kanıtlamak için
-          // kasıtlı olarak arkaPlan.
-          priority: CardPriority.arkaPlan,
-        ),
-        const Flashcard(
-          id: 't1',
-          question: 'Öncelikli temel soru?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.temel,
-          priority: CardPriority.oncelikli,
-        ),
-        const Flashcard(
-          id: 't2',
-          question: 'Arka plan temel soru?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.temel,
-          priority: CardPriority.arkaPlan,
-        ),
-      ];
-
-      await tester.pumpWidget(_wrap(_storeWith(mixedCards)));
-      await tester.tap(find.text('Çalışmaya Başla (3)'));
-      await tester.pumpAndSettle();
-
-      // Sınav Modu kapalıyken üç kart da havuzda.
-      expect(find.text('Sınav Modu'), findsOneWidget);
-      expect(find.text('3 kart'), findsOneWidget);
-      expect(find.text('0 / 3'), findsOneWidget);
-
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-
-      // Açıkken yalnızca sınav tipi + öncelikli temel kart kalır (2).
-      expect(find.text('2 kart'), findsOneWidget);
-      expect(find.text('0 / 2'), findsOneWidget);
-
-      // Tekrar kapatınca üçe döner.
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-      expect(find.text('3 kart'), findsOneWidget);
-      expect(find.text('0 / 3'), findsOneWidget);
-    },
-  );
-
   group('Hocanın Favorileri', () {
     testWidgets('el yazısı kartta çalışma ekranında rozet görünür', (
       tester,
@@ -486,8 +430,8 @@ void main() {
         expect(find.text('Sadece Hocanın Favorileri'), findsOneWidget);
         expect(find.text('0 / 3'), findsOneWidget);
 
-        // İkinci switch: Sınav Modu'ndan sonra gelen "Sadece Hocanın
-        // Favorileri" toggle'ı.
+        // Ekrandaki TEK switch: "Sadece Hocanın Favorileri". (2026-08-19'a
+        // kadar üstünde bir "Sınav Modu" switch'i daha vardı, kaldırıldı.)
         await tester.tap(find.byType(Switch).last);
         await tester.pumpAndSettle();
 
@@ -735,56 +679,6 @@ void main() {
       expect(find.text('0 / 2'), findsOneWidget);
     });
 
-    testWidgets('Sınav Modu ile birlikte çalışır (ikisi de uygulanır)',
-        (tester) async {
-      final mixedCards = [
-        const Flashcard(
-          id: 's1',
-          question: 'Sınav tipi, ileti sistemi?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.sinav,
-          topic: 'ileti sistemi',
-        ),
-        const Flashcard(
-          id: 's2',
-          question: 'Sınav tipi, koroner?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.sinav,
-          topic: 'koroner dolaşım',
-        ),
-        const Flashcard(
-          id: 't1',
-          question: 'Temel, ileti sistemi?',
-          answer: 'Cevap.',
-          deckId: 'deck-1',
-          cardType: CardType.temel,
-          priority: CardPriority.arkaPlan,
-          topic: 'ileti sistemi',
-        ),
-      ];
-      final store = _storeWith(mixedCards);
-      await tester.pumpWidget(_wrap(store));
-      await tester.tap(find.text('Çalışmaya Başla (3)'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byType(Switch).first); // Sınav Modu aç
-      await tester.pumpAndSettle();
-      expect(find.text('2 kart'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.topic_outlined));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(CheckboxListTile, 'ileti sistemi'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Uygula (1)'));
-      await tester.pumpAndSettle();
-
-      // Sınav Modu + "ileti sistemi": yalnızca s1 kalmalı.
-      expect(find.text('1 kart'), findsOneWidget);
-      expect(find.text('Sınav tipi, ileti sistemi?'), findsOneWidget);
-    });
-
     testWidgets('konu yoksa buton pasif kalır', (tester) async {
       final store = _storeWith(const [
         Flashcard(id: '1', question: 'S', answer: 'C', deckId: 'deck-1'),
@@ -847,41 +741,6 @@ void main() {
 
       expect(find.text('Bugün Çalış'), findsOneWidget);
       expect(find.text('0 / 2'), findsOneWidget);
-    });
-
-    testWidgets('Sınav Modu birleşik kuyrukta da uygulanır', (tester) async {
-      final store = FlashcardStore(
-        _NoopGenerator(),
-        initialData: LibraryData(
-          decks: [_deck, _deckB],
-          cards: const [
-            Flashcard(
-              id: 'exam',
-              question: 'Sınav tipi?',
-              answer: 'Cevap',
-              deckId: 'deck-1',
-              cardType: CardType.sinav,
-            ),
-            Flashcard(
-              id: 'background',
-              question: 'Arka plan?',
-              answer: 'Cevap',
-              deckId: 'deck-2',
-              priority: CardPriority.arkaPlan,
-            ),
-          ],
-        ),
-      );
-
-      await tester.pumpWidget(wrapDaily(store));
-      await tester.pumpAndSettle();
-
-      expect(find.text('2 kart'), findsOneWidget);
-
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-
-      expect(find.text('1 kart'), findsOneWidget);
     });
 
     testWidgets('Konu Filtrele birleşik kuyrukta destelerden bağımsız çalışır',
