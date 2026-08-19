@@ -100,13 +100,7 @@ doğrulandı; 2026-08-14'te kullanıcı talimatıyla `flashcard_prompt.dart`'a
 > timeout'lar BİLİNÇLİ olarak retry edilmiyor (çift faturalama riski,
 > bkz. "Hata Yönetimi"). Flex'in 1-15 dakikalık belirsiz gecikmesi bu
 > mimariyle uyumsuz. Ayrıntı ve yeniden değerlendirme koşulu "Bilinmeyen /
-> Henüz Kararlaştırılmamış" bölümünde; 2026-08-19'da `pdf_cache`'teki 733
-> gerçek kart üzerinden `zorlukKurali` ile `sinavTipiKurali`'nin çakışması
-> İLK KEZ SAYISAL OLARAK ölçüldü — `zor` etiketi `sinav`'ın TAM ALT KÜMESİ
-> çıktı (P(sinav|zor)=%100, beş prompt sürümünde ayrı ayrı) ve
-> `zorlukKurali`'nin tek bağımsız dalı olan "formül/sayısal hesap" 733 kartta
-> HİÇ tetiklenmemişti; prompt'a DOKUNULMADI, bulgu kaydı olarak yeni bir
-> bölüme yazıldı (bkz. "`zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI").
+> Henüz Kararlaştırılmamış" bölümünde.
 
 ## Ne yapıyor bu uygulama
 Tıp öğrencileri için AI destekli flashcard (çalışma kartı) uygulaması.
@@ -1027,114 +1021,6 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
   - Test: `test/ornek_tabanli_kart_kurali_test.dart`
     (8 test — kural metni, iki yola da girdiği, Yol A'da statik cache bloğunda
     durduğu). `kPromptVersion` v28→**v30** (v29 ATLANDI, aşağı bkz.).
-
-## ⚠️ `zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI — ÖLÇÜLDÜ, KARAR VERİLMEDİ (2026-08-19)
-> **PROMPT'A DOKUNULMADI.** Bu bölüm bir bulgu kaydıdır, uygulanmış bir
-> değişiklik değil. "Düzeltmeye" kalkmadan önce aşağıdaki v26 uyarısını oku.
-> Masaüstündeki tam rapor:
-> `~/Desktop/MedKart_zorluk_sinavtipi_cakisma_olcumu_2026-08-19.md`.
-
-İki kural kod tabanında ayrı ve bağımsız iki eksen gibi duruyor
-(`flashcard_prompt.dart:90` = `sinavTipiKurali`, `:162` = `zorlukKurali`) ama
-**üretilen kartlarda tek bir eksenin iki adı gibi davranıyorlar.** Bu, daha
-önce `ornekTabanliKartKurali` notunda "ÖRTÜŞEBİLİR ama aynı değil" diye
-geçiştirilen çakışmanın ilk kez SAYISAL ölçümüdür.
-
-**Veri:** `pdf_cache.generated_cards`, smoke-test artefaktı ve boş satır
-elenince **6 gerçek PDF / 733 kart**, 5 prompt sürümü (sürümsüz, v16, v23,
-v24, v30). `kullanici_kutuphane` RLS ile kilitli olduğu için başka
-kullanıcıların kütüphanesi ölçüme GİRMEDİ — bu "tüm kullanıcılar" değil,
-önbelleğe düşmüş üretim çıktısıdır.
-
-### Çapraz dağılım (n=733) — 6 hücrenin 2'si YAPISAL OLARAK BOŞ
-| | temel | sinav | satır toplamı |
-|---|---:|---:|---:|
-| **kolay** | 281 (%38,3) | **0 (%0,0)** | 281 (%38,3) |
-| **orta** | 323 (%44,1) | 32 (%4,4) | 355 (%48,4) |
-| **zor** | **0 (%0,0)** | 97 (%13,2) | 97 (%13,2) |
-| sütun toplamı | 604 (%82,4) | 129 (%17,6) | 733 |
-
-`kolay+sinav` ve `zor+temel` 733 kartta TEK KEZ BİLE oluşmadı.
-
-### Üç bulgu
-1. **`zor ⊂ sinav`, kapsanma TAM.** `P(sinav | zor) = %100,0`,
-   Jaccard(zor, sinav) = **0,752**, Cramér's V = **0,852**, belirsizlik
-   azalması **%68,5** (zorluğu bilmek kart tipinin belirsizliğinin üçte
-   ikisini yok ediyor). **Kapsanma BEŞ prompt sürümünün HEPSİNDE ayrı ayrı
-   %100** — tek bir çalıştırmanın tesadüfü değil.
-2. **`zorlukKurali`'nin tek BAĞIMSIZ dalı hiç tetiklenmemiş.** Kuralın "zor"
-   tanımı iki dallı: *"hasta/durum senaryosu + ayırıcı tanı"* **ya da**
-   *"formül/sayısal hesap"*. Birinci dal `sinavTipiKurali`'nin tanımının
-   KENDİSİ. İkinci dal — yani kuralın kendine ait olan tek bölge — 733 kartta
-   **0 kez** kullanıldı (`zor` + vinyet yok + formül/hesap var = **0**). Yani
-   "zor" etiketi fiilen `sinavTipiKurali`'nin çıktısının ETİKET KOPYASI.
-   İçerik ölçümü de bunu doğruluyor: `P(vinyet | zor) = %73,2` ve
-   `P(vinyet | sinav) = %72,9` — iki kural AYNI kartları seçiyor.
-   Ek olarak `zorlukKurali`'nin "ayırıcı tanı gerektiren" şartı da fiilen
-   uygulanmıyor: `zor` kartların yalnızca **%9'unda** ayırıcı tanı ifadesi var.
-3. **Tek ayrışma noktası da ayrışmıyor.** `orta|sinav` (32) ile `zor|sinav`
-   (97), iki kuralın farklı cevap verdiği TEK hücre çifti. Ölçülebilir hiçbir
-   özellik ikisini ayırmıyor: vinyet oranı %71,9 vs %73,2 (**p = 0,88**), soru
-   uzunluğu 175 vs 192 karakter (Welch **p = 0,09**), ayırıcı tanı %6 vs %9.
-   Model bu ayrımı metne YANSITMIYOR.
-
-### Sürüm bazında — çakışma ZAYIFLAMIYOR, GÜÇLENİYOR
-| prompt | n | zor | sinav | P(sinav\|zor) | P(vinyet\|sinav) |
-|---|---:|---:|---:|---:|---:|
-| (sürümsüz) | 49 | 12 | 12 | %100 | %83 |
-| v16 | 179 | 27 | 30 | %100 | %47 |
-| v23 | 238 | 19 | 27 | %100 | %52 |
-| v30 (güncel) | 266 | 39 | 60 | %100 | **%93** |
-
-v23'teki genel sapma (%68 kolay, %8 zor) o sürümün flash-lite denemeleri
-sırasında üretildiğiyle tutarlı — belgelenmiş "yüzeysel/tanım-düzeyi kart"
-sorununun sayısal izi (bkz. "Devam Eden İş" 0.7).
-
-### Pratik sonuçları (bunları kod tarafında bilerek kullan)
-- **6 hücrelik tablo gerçekte 4 hücre.** Zorluk ve kart tipi filtrelerini
-  "bağımsız iki boyut" varsayan yeni bir UI/özellik tasarlama — değiller.
-- **Zorluk filtresindeki "Zor" çipi, fiilen "sınav tipi" filtresiyle AYNI kart
-  kümesini veriyor** (`card_list_screen.dart` `_FilterBar`). İkisini yan yana
-  sunmak kullanıcıya iki ayrı seçenek gibi görünüyor ama değil.
-- **Sınav Modu** (`CardFilter.examOnly` = `sinav` ∧ `oncelikli`) ölçülen
-  **129 kart / %17,6**. Ayrıca TÜM `sinav` kartlar zaten `oncelikli`
-  (0 tanesi `arkaPlan`), yani öncelik koşulu burada HİÇBİR ŞEY elemiyor —
-  Sınav Modu fiilen "tüm zor kartlar + `orta`nın %9'u".
-- `arkaPlan` etiketli 126 kartın (%17,2) TAMAMI `temel` tarafında.
-
-### ⚠️ "DÜZELTMEDEN" ÖNCE OKU
-Bu ölçüm bir SORUN TESPİTİDİR, çözüm reçetesi DEĞİL. İki kuralı
-"tutarlı hale getirmek" için birini kırpma girişimi bu depoda DAHA ÖNCE
-YAPILDI ve YANLIŞ ÇIKTI (v26'da `guncellikDiliYasagiKurali`'nin kaynağa atıf
-tavsiyesi, `kaynakReferansiGizlemeKurali` ile "çelişiyor" diye silinmişti;
-kullanıcı aynı gün geri bildirdi, v27'de kapsam ayrımıyla düzeltildi — bkz.
-"Kart Üretim Kuralları"). Aynı hata kalıbı burada da geçerli: `zorlukKurali`
-ile `sinavTipiKurali` BİLİNÇLİ olarak arbitre edilmemiş durumda
-(bkz. `ornekTabanliKartKurali` notundaki aynı gerekçe). **Kullanıcı karar
-vermeden prompt'a dokunma; dokunulacaksa da önce hangi davranışın İSTENDİĞİ
-netleşmeli** — "zor" bağımsız bir zorluk ekseni mi olsun (o zaman formül/hesap
-dalı ve vinyet-dışı zorluk ölçütleri güçlendirilmeli), yoksa "sinav"ın
-şiddet kademesi mi (o zaman çakışma bir hata değil, tasarım)?
-
-### Metodoloji ve tekrarlanabilirlik
-- Sınıflandırma **belirteç (regex) tabanlı**, LLM ile yapılmadı (API maliyeti,
-  yetki istenmedi) — bu yüzden KABA. Güvence için İKİ BAĞIMSIZ vinyet ölçütü
-  kullanıldı (anahtar kelime vs. soru kökünden önce anlatı cümlesi olması);
-  aralarındaki uyum **%94,8**, Jaccard 0,648. Yanlış-pozitifler elle
-  doğrulandı: vinyet taşıyıp `temel` kalan 4 kartın 2'si aslında belirteç
-  hatası ("75 **yaşından önce** kanser riski" — hasta değil, epidemiyolojik
-  istatistik), yani `sinavTipiKurali` pratikte vinyet KAÇIRMIYOR.
-- **Türkçe tuzağı:** `'İ'.toLowerCase()` JS'te `i` + birleşen nokta üretir ve
-  eşleşmeyi bozar. Script'ler kendi normalizasyon fonksiyonunu kullanıyor;
-  Türkçe metinde regex taraması yazarken bunu atlama.
-- Anlamlılık: iki oran z-testi + Welch t-testi (normal yaklaşım, erf ile).
-- **Hiçbir API çağrısı yapılmadı, hiçbir proje dosyası değiştirilmedi.**
-- Script'ler pakete dahil DEĞİL, oturum scratchpad'inde
-  (`agg2.js` çapraz dağılım, `overlap.js` çakışma/entropi/içerik,
-  `sep.js` anlamlılık testleri). Veriyi tazelemek için `pdf_cache`'i
-  `select=hash,prompt_version,created_at,hit_count,generated_cards` ile
-  anon key üzerinden çek (bkz. "Maliyet Optimizasyonu" — tablo anon okumaya
-  BİLİNÇLİ olarak açık).
 
 ## Hata Yönetimi (`gemini_transport.dart` + `pdf_card_pipeline.dart` ile doğrulandı)
 - **Savunmasız cast bug'ı (çözüldü):** API cevabını `as List` ile cast etmeden
@@ -2819,17 +2705,6 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   edilmedi (bkz. "Kart Üretim Kuralları"). **2026-08-18 A/B'si
   kuralı AKLADI** — kart fazlalığı ondan gelmiyor (%34,7 kuralsız vs %32,7
   kurallı), o yüzden "fazlalık var" gerekçesiyle kırpma.
-- **`zorlukKurali` ile `sinavTipiKurali`'ni "tutarlı hale getirmek" için
-  birini kırpma/gevşetme — kullanıcı karar vermeden prompt'a dokunma.**
-  Çakışma 2026-08-19'da ölçüldü ve TAM çıktı (`zor ⊂ sinav`, %100 kapsanma,
-  Cramér's V 0,852) ama bu bir SORUN TESPİTİ, çözüm reçetesi değil; hangi
-  davranışın istendiği ("zor" bağımsız bir eksen mi, yoksa "sinav"ın şiddet
-  kademesi mi) henüz netleşmedi. Aynı kalıptaki bir "çelişkiyi giderme"
-  girişimi v26'da YANLIŞ çıkmıştı. Bkz. "`zorlukKurali` × `sinavTipiKurali`
-  ÇAKIŞMASI" bölümü.
-- Zorluk ve kart tipini BAĞIMSIZ iki boyut varsayan yeni bir filtre/UI/istatistik
-  tasarlama — ölçümde değiller (6 hücrenin 2'si yapısal olarak boş, zorluk
-  filtresindeki "Zor" fiilen "sınav tipi" ile aynı kümeyi veriyor).
 - `kPromptVersion`'da v29'u kullanma — denenip geri alınmış bir numara, atlandı.
 - `emptyResultPages`'i `failedPages`'e karıştırma / hata gibi raporlama —
   modele gidip `[]` dönmek kuralın BEKLEDİĞİ davranış (kapak/ajanda/kapanış
