@@ -7,11 +7,20 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medcard/models/pdf_page.dart';
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:medcard/services/pdf_card_pipeline.dart';
 
 void main() {
   test('Gemini regresyon: 3 sayfalık PDF pipeline (gerçek API)', () async {
     dotenv.loadFromString(envString: File('.env').readAsStringSync());
+    // 2026-08-20: ai-proxy dogrulanmis oturum token i istiyor (fail-closed).
+    // Gercek Supabase oturumu burada yok — token disaridan verilir:
+    //   MEDKART_ACCESS_TOKEN=<jwt> flutter test <bu dosya>
+    final token = Platform.environment['MEDKART_ACCESS_TOKEN'];
+    if (token == null || token.isEmpty) {
+      fail('MEDKART_ACCESS_TOKEN tanimli degil — ai-proxy oturum token i istiyor.');
+    }
+    debugSessionAccessTokenOverride = () => token;
 
     final pages = <PdfPage>[
       const PdfPage(

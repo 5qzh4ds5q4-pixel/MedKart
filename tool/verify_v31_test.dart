@@ -31,6 +31,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:medcard/models/flashcard.dart';
 import 'package:medcard/services/flashcard_prompt.dart' as prompt;
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _scratch =
@@ -50,6 +51,14 @@ void main() {
   test('CANLI: v31 uretimde zorluk hep orta mi, sinav tipi duruyor mu', () async {
     SharedPreferences.setMockInitialValues({});
     dotenv.loadFromString(envString: File('.env').readAsStringSync());
+    // 2026-08-20: ai-proxy dogrulanmis oturum token i istiyor (fail-closed).
+    // Gercek Supabase oturumu burada yok — token disaridan verilir:
+    //   MEDKART_ACCESS_TOKEN=<jwt> flutter test <bu dosya>
+    final token = Platform.environment['MEDKART_ACCESS_TOKEN'];
+    if (token == null || token.isEmpty) {
+      fail('MEDKART_ACCESS_TOKEN tanimli degil — ai-proxy oturum token i istiyor.');
+    }
+    debugSessionAccessTokenOverride = () => token;
 
     final ham =
         jsonDecode(File('$_scratch/bulasici_pages.json').readAsStringSync())

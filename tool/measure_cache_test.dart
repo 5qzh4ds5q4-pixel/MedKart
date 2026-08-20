@@ -22,6 +22,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medcard/services/flashcard_prompt.dart' as prompt;
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:medcard/services/gemini_transport.dart';
 import 'package:medcard/services/usage_metadata.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -154,8 +155,17 @@ void main() {
   // `GeminiTransport.send` -> `DeviceIdService.getOrCreate` SharedPreferences
   // kullanıyor; binding + mock değer olmadan "Binding has not yet been
   // initialized" ile patlıyor. deviceId yalnızca proxy ZARFINA giriyor,
-  // Gemini'ye giden `payload`'a DEĞİL — yani her koşuda taze bir UUID olması
-  // cache ölçümünü etkilemez (yalnızca kota sayacı taze bir kovaya yazar).
+  // Gemini'ye giden `payload`'a DEĞİL.
+  //
+  // 2026-08-20 — BU SCRIPT ARTIK GERÇEK BİR OTURUM TOKEN'I İSTİYOR.
+  // `ai-proxy` kimliği doğrulanamayan isteği 401 ile reddediyor
+  // (fail-closed) ve `SessionToken.require()` token yoksa ağa hiç çıkmadan
+  // fırlatıyor. Burada gerçek Supabase oturumu yok, token DIŞARIDAN gelir:
+  //   MEDKART_ACCESS_TOKEN=<jwt> flutter test tool/measure_cache_test.dart
+  // Token'i almak icin: tarayicida giris yap, DevTools konsolunda
+  //   JSON.parse(localStorage.getItem('sb-<ref>-auth-token')).access_token
+  // Suresi dolmus token 401 dondurur (olcum degil, kimlik hatasi) —
+  // ciktida HTTP 401 gorursen once token'i tazele.
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // Test binding'i `HttpOverrides.global`'ı mock'layıp TÜM HTTP isteklerine
@@ -167,6 +177,14 @@ void main() {
   test('v28 context cache canlı ölçümü (GÖRSELSİZ, gerçek API)', () async {
     SharedPreferences.setMockInitialValues({});
     dotenv.loadFromString(envString: File('.env').readAsStringSync());
+    final token = Platform.environment['MEDKART_ACCESS_TOKEN'];
+    if (token == null || token.isEmpty) {
+      fail(
+        'MEDKART_ACCESS_TOKEN tanimli degil — ai-proxy dogrulanmis oturum '
+        'token i istiyor (fail-closed). Dosya basindaki nota bak.',
+      );
+    }
+    debugSessionAccessTokenOverride = () => token;
 
     // Ölçümün anlamlı olması için ön ekin gerçekten sabit olduğunu ÖNCE
     // yerel olarak doğrula — API'ye boşuna para harcamayalım.

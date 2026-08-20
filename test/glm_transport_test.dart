@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medcard/services/flashcard_generator.dart';
 import 'package:medcard/services/glm_transport.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// [GlmTransport] DeepSeek'in transport desenini izler ama ÜÇ güvenlik
@@ -20,7 +21,12 @@ void main() {
           'SUPABASE_ANON_KEY=test-anon-key',
     );
     SharedPreferences.setMockInitialValues({});
+    // Transport artık Authorization'a kullanıcı oturum token'ı koyuyor ve
+    // token yoksa ağa çıkmadan fırlatıyor (bkz. SessionToken).
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   GlmTransport transportWith(MockClient client) => GlmTransport(
     client: client,
@@ -180,7 +186,8 @@ void main() {
       expect(envelope!['deviceId'], isA<String>());
     });
 
-    test('istek ai-proxy adresine anon anahtarıyla gider', () async {
+    test('istek ai-proxy adresine gider: Authorization=oturum, apikey=anon',
+        () async {
       Uri? calledUri;
       Map<String, String>? headers;
       final transport = GlmTransport(
@@ -198,7 +205,10 @@ void main() {
         calledUri.toString(),
         'https://test.supabase.co/functions/v1/ai-proxy',
       );
-      expect(headers!['Authorization'], 'Bearer test-anon-key');
+      // 2026-08-20: Authorization artık KULLANICI oturum token'ı — anon key
+      // gönderilirse sunucu 401 döner (anon JWT'sinde `sub` claim'i yok).
+      expect(headers!['Authorization'], 'Bearer test-access-token');
+      // apikey anon key OLARAK KALIR: Supabase gateway'i için gerekli.
       expect(headers!['apikey'], 'test-anon-key');
     });
   });

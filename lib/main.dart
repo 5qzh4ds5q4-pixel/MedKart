@@ -44,10 +44,16 @@ Future<void> main() async {
     debugPrint('.env yüklenemedi: $e');
   }
 
-  // Supabase Auth (FAZ 1 — iskelet): .env'deki URL/anon key ile başlatılır.
-  // Başlatılamazsa (env eksik/ağ yok) uygulama YİNE anonim açılır — zorunlu
-  // login kapısı bu fazda yok, AuthService bunu "yapılandırma eksik" olarak
-  // kibarca raporlar (bkz. lib/services/auth_service.dart).
+  // Supabase Auth: .env'deki URL/anon key ile başlatılır.
+  // (DÜZELTME 2026-08-20: bu yorum "FAZ 1 — iskelet ... zorunlu login kapısı
+  // bu fazda yok" diyordu, ESKİMİŞTİ — kapı Faz 3'te geldi ve aktif.)
+  //
+  // Başlatılamazsa (env eksik/ağ yok) uygulama YİNE açılır ve gezinme
+  // serbesttir; ama giriş gerektiren eylemler (`requireAuth`) ve kart üretimi
+  // çalışmaz — `ai-proxy` 2026-08-20'den beri doğrulanmış bir oturum token'ı
+  // olmayan isteği 401 ile reddediyor (fail-closed). AuthService bu durumu
+  // "yapılandırma eksik" olarak kibarca raporlar
+  // (bkz. lib/services/auth_service.dart, lib/services/session_token.dart).
   final supabaseUrl = dotenv.maybeGet('SUPABASE_URL')?.trim();
   final supabaseAnonKey = dotenv.maybeGet('SUPABASE_ANON_KEY')?.trim();
   if (supabaseUrl != null &&

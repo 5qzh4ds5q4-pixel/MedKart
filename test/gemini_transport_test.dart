@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medcard/services/flashcard_generator.dart';
 import 'package:medcard/services/gemini_transport.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Zaman aşımının 5xx/429'dan AYRI ele alındığını doğrular.
@@ -22,7 +23,12 @@ void main() {
           'SUPABASE_ANON_KEY=test-anon-key',
     );
     SharedPreferences.setMockInitialValues({});
+    // Transport artık Authorization'a kullanıcı oturum token'ı koyuyor ve
+    // token yoksa ağa çıkmadan fırlatıyor (bkz. SessionToken).
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   GeminiTransport transportWith(MockClient client) => GeminiTransport(
     client: client,

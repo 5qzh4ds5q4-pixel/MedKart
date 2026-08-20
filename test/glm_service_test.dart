@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:medcard/models/flashcard.dart';
 import 'package:medcard/services/flashcard_generator.dart';
 import 'package:medcard/services/glm_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:medcard/services/glm_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -59,7 +60,12 @@ void main() {
     );
     // GlmTransport DeviceIdService üzerinden shared_preferences okuyor.
     SharedPreferences.setMockInitialValues({});
+    // 2026-08-20: Authorization artık kullanıcı oturum token'ı (bkz.
+    // SessionToken); testlerde oturumu sabitliyoruz.
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   /// Gönderilen isteklerin ai-proxy zarflarını biriktirir.
   late List<Map<String, dynamic>> sent;

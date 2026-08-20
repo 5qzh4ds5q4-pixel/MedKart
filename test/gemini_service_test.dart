@@ -9,6 +9,7 @@ import 'package:medcard/models/flashcard.dart';
 import 'package:medcard/services/flashcard_generator.dart';
 import 'package:medcard/services/flashcard_prompt.dart' as prompt;
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Gemini'ın gerçek yanıt zarfını taklit eder.
@@ -45,7 +46,14 @@ void main() {
     // GeminiTransport DeviceIdService üzerinden shared_preferences okuyor
     // (zarftaki `deviceId` alanı); testlerde bellek-içi mock yeterli.
     SharedPreferences.setMockInitialValues({});
+    // 2026-08-20: transport artık `Authorization` başlığına ANON KEY değil
+    // KULLANICI OTURUM TOKEN'I koyuyor ve token yoksa ağa hiç çıkmadan
+    // fırlatıyor (bkz. SessionToken). Testlerde gerçek Supabase yok, o yüzden
+    // oturumu sabitliyoruz. tearDown'da MUTLAKA null'a döndürülür.
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   GeminiService serviceReturning(String body, {int statusCode = 200}) {
     return GeminiService(

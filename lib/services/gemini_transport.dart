@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 import 'device_id_service.dart';
+import 'session_token.dart';
 import 'flashcard_generator.dart';
 
 /// Gemini'a giden ağ isteğinden sorumlu tek yer: [GeminiService] ürettiği
@@ -58,6 +59,15 @@ class GeminiTransport {
   }) async {
     final functionUrl = _readFunctionUrl();
     final anonKey = _readAnonKey();
+    // KİMLİK: `ai-proxy` artık doğrulanmış bir kullanıcı JWT'si bekliyor ve
+    // çözemezse 401 döner (fail-closed). Token yoksa ağa HİÇ çıkmadan burada
+    // fırlatılır — sunucuya kimliksiz istek gitmesin.
+    final accessToken = SessionToken.require();
+    // `deviceId` KİMLİK OLARAK ARTIK KULLANILMIYOR (sunucu görmezden geliyor).
+    // Zarfta BİLİNÇLİ olarak bırakıldı: fonksiyonun CANLIDAKİ eski sürümü bu
+    // alanı hâlâ ZORUNLU görüyor ve yoksa 400 döndürüyor. İstemci, fonksiyon
+    // deploy edilmeden önce yayına girerse bu alan sayesinde çalışmaya devam
+    // eder. Deploy tamamlandıktan sonra kaldırılabilir (ayrı, küçük bir iş).
     final deviceId = await DeviceIdService.getOrCreate();
 
     final envelope = jsonEncode({
@@ -68,12 +78,18 @@ class GeminiTransport {
       'pageCount': 1,
     });
 
-    return _sendWithRetry(Uri.parse(functionUrl), anonKey, envelope);
+    return _sendWithRetry(
+      Uri.parse(functionUrl),
+      anonKey,
+      accessToken,
+      envelope,
+    );
   }
 
   Future<http.Response> _sendWithRetry(
     Uri uri,
     String anonKey,
+    String accessToken,
     String body,
   ) async {
     for (var attempt = 1; ; attempt++) {
@@ -84,7 +100,11 @@ class GeminiTransport {
               uri,
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer $anonKey',
+                // Authorization = KULLANICI oturum token'ı (anon key DEĞİL):
+                // sunucu kota kimliğini buradan çözüyor.
+                'Authorization': 'Bearer $accessToken',
+                // apikey = anon key olarak KALIR: Supabase API gateway'inin
+                // projeyi tanıması için gerekli, kimlik taşımaz.
                 'apikey': anonKey,
               },
               body: body,

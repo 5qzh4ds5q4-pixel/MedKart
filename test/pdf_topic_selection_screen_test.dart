@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medcard/models/pdf_page.dart';
 import 'package:medcard/screens/pdf_topic_selection_screen.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:medcard/services/topic_scan_service.dart';
 import 'package:medcard/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -69,7 +70,12 @@ void main() {
           'SUPABASE_ANON_KEY=test-anon-key',
     );
     SharedPreferences.setMockInitialValues({});
+    // TopicScanService de GeminiTransport üzerinden gidiyor; transport
+    // 2026-08-20'den beri oturum token'ı istiyor (bkz. SessionToken).
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   group('Konuya Göre Seç', () {
     testWidgets(

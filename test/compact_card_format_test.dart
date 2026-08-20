@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:medcard/models/flashcard.dart';
 import 'package:medcard/services/flashcard_prompt.dart' as prompt;
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// KOMPAKT KART BİÇİMİ (2026-08-04): model artık her kartı alan adlı bir nesne
@@ -355,7 +356,12 @@ void main() {
             'SUPABASE_ANON_KEY=test-anon-key',
       );
       SharedPreferences.setMockInitialValues({});
+      // 2026-08-20: transport Authorization'a kullanıcı oturum token'ı
+      // koyuyor ve token yoksa ağa çıkmadan fırlatıyor (bkz. SessionToken).
+      debugSessionAccessTokenOverride = () => 'test-access-token';
     });
+
+    tearDown(() => debugSessionAccessTokenOverride = null);
 
     GeminiService serviceReturning(String body) {
       return GeminiService(

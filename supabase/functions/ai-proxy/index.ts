@@ -10,7 +10,9 @@
 //
 // İstek gövdesi:
 //   { provider: 'gemini'|'deepseek'|'glm', model?: string, payload: <sağlayıcıya
-//     aynen iletilecek JSON gövde>, deviceId: string, pageCount?: number }
+//     aynen iletilecek JSON gövde>, pageCount?: number }
+// AYRICA ZORUNLU: `Authorization: Bearer <kullanıcı oturum JWT'si>` başlığı —
+// kota kimliği buradan çözülür (bkz. aşağıdaki KİMLİK DOĞRULAMA notu).
 // `model` yalnızca gemini için zorunlu (URL path'inde kullanılıyor); deepseek
 // ve glm'de model adı payload'ın içindedir.
 // `pageCount` kota sayacına eklenecek miktar (varsayılan 1).
@@ -21,6 +23,31 @@
 // 429 dönülür. İstemcide değişiklik gerekmedi: 429 zaten
 // `FlashcardGenerationException.isQuota` üretiyor ve pipeline tüm işlemi
 // durdurup kullanıcıya net "kota doldu" mesajı gösteriyor.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// KİMLİK DOĞRULAMA — FAIL-CLOSED (2026-08-20)
+// ═══════════════════════════════════════════════════════════════════════════
+// Kota kimliği artık gövdedeki `deviceId` DEĞİL, `Authorization` başlığındaki
+// oturum token'ından ÇÖZÜLEN `auth.uid()`.
+//
+// NEDEN: `deviceId`, istemcinin `shared_preferences`'ında duran rastgele bir
+// UUID'ydi — kimlik DOĞRULAMASI değildi. İstemci gövdeye ne yazarsa o kabul
+// ediliyordu ve tarayıcı verisi temizlenince sayaç sıfırlanıyordu. Ücretli
+// bir özelliği böyle bir sayaca bağlamak, ödemeyi bypass edilebilir kılardı.
+//
+// ⚠️ İKİ FAIL POLİTİKASI BİLİNÇLİ OLARAK FARKLI, BİRİNİ DİĞERİNE UYDURMA:
+//   * KİMLİK DOĞRULAMA → FAIL-CLOSED. Token yok/geçersizse istek HİÇBİR
+//     sağlayıcıya gitmeden 401 döner. Şüphede kal, geçirme.
+//   * KOTA SORGUSU → FAIL-OPEN (değişmedi). Geçici bir DB sorunu yüzünden
+//     tüm kart üretimini kilitlemek, bir kullanıcının tavanı birkaç sayfa
+//     aşmasından daha kötü.
+// Yani "kimliğini kanıtlayamayan giremez, ama girenin sayacı sayılamıyorsa
+// yine de çalışır".
+//
+// ⚠️ İSTEMCİ İLE BİRLİKTE DEPLOY EDİLMELİ: bu fonksiyon `Authorization`
+// başlığında ANON KEY değil KULLANICI JWT'si bekler. Eski bir istemci
+// (anon key gönderen) bu sürüme karşı 401 alır. Bkz. üç transport'taki
+// `_authorizationToken` (gemini/deepseek/glm_transport.dart).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GEMINI_BASE_URL =
@@ -41,6 +68,9 @@ interface ProxyRequest {
   provider?: string;
   model?: string;
   payload?: unknown;
+  /// ESKİ ALAN — 2026-08-20'den beri KİMLİK AMAÇLI OKUNMUYOR. Eski
+  /// istemciler hâlâ gönderiyor olabilir diye tipte bırakıldı; kota kimliği
+  /// artık yalnızca doğrulanmış `auth.uid()`'dir (bkz. `resolveUserId`).
   deviceId?: string;
   pageCount?: number;
 }
@@ -60,7 +90,7 @@ Deno.serve(async (req: Request) => {
     return jsonError(400, "Geçersiz JSON gövdesi.");
   }
 
-  const { provider, model, payload, deviceId, pageCount } = body;
+  const { provider, model, payload, pageCount } = body;
 
   if (provider !== "gemini" && provider !== "deepseek" && provider !== "glm") {
     return jsonError(400, 'provider "gemini", "deepseek" veya "glm" olmalı.');
@@ -68,13 +98,22 @@ Deno.serve(async (req: Request) => {
   if (payload === undefined || payload === null) {
     return jsonError(400, "payload eksik.");
   }
-  if (!deviceId || typeof deviceId !== "string") {
-    return jsonError(400, "deviceId eksik.");
+
+  // KAPI 1 — KİMLİK (FAIL-CLOSED). Gövdedeki `deviceId` kimlik amaçlı
+  // GÖRMEZDEN GELİNİR: doğrulanmamış, istemcinin uydurabileceği bir string.
+  // Tek geçerli kimlik, Authorization başlığından çözülen auth.uid()'dir.
+  const userId = await resolveUserId(req);
+  if (!userId) {
+    return jsonError(
+      401,
+      "Bu işlem için giriş yapman gerekiyor. Oturumun süresi dolmuş " +
+        "olabilir — çıkıp tekrar giriş yap.",
+    );
   }
 
-  // KAPI: sağlayıcıya gitmeden önce aylık tavanı kontrol et. Aşılmışsa hiç
-  // çağrı yapma — maliyet burada durur.
-  const capped = await isOverMonthlyCap(deviceId);
+  // KAPI 2 — KOTA (fail-open, değişmedi): sağlayıcıya gitmeden önce aylık
+  // tavanı kontrol et. Aşılmışsa hiç çağrı yapma — maliyet burada durur.
+  const capped = await isOverMonthlyCap(userId);
   if (capped) {
     return jsonError(
       429,
@@ -139,7 +178,7 @@ Deno.serve(async (req: Request) => {
   // Kota sayacı en iyi çaba (best-effort): yalnızca başarılı istekleri
   // sayar, kayıt hatası istemciye dönecek asıl cevabı ASLA engellemez.
   if (upstream.ok) {
-    logUsage(provider, deviceId, pageCount ?? 1).catch((e) => {
+    logUsage(provider, userId, pageCount ?? 1).catch((e) => {
       console.error("kullanım kota kaydı başarısız:", e);
     });
   }
@@ -162,6 +201,44 @@ function serviceClient() {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   return createClient(supabaseUrl, serviceRoleKey);
+}
+
+/// `Authorization: Bearer <jwt>` başlığındaki oturum token'ını doğrulayıp
+/// kullanıcının `auth.uid()`'ini döner. Doğrulanamıyorsa `null` — çağıran
+/// taraf bunu 401'e çevirir (FAIL-CLOSED, bkz. dosya başındaki not).
+///
+/// FAIL-OPEN DEĞİL, BİLİNÇLİ: `isOverMonthlyCap`'in aksine buradaki her
+/// başarısızlık (başlık yok, biçim bozuk, token süresi dolmuş, ağ/servis
+/// hatası) `null` döner ve isteği REDDETTİRİR. Kimliği doğrulanamayan bir
+/// isteği "geçici bir sorun olabilir" diye geçirmek, kotanın tamamını
+/// anlamsız kılardı.
+///
+/// ⚠️ ANON KEY DE GEÇERLİ BİR JWT'DİR ama `sub` (kullanıcı id) claim'i
+/// TAŞIMAZ. `getUser` onu reddetmeli; yine de savunmacı olarak `user.id`
+/// varlığı ayrıca kontrol ediliyor — eski bir istemci anon key gönderirse
+/// sessizce "kimliksiz kullanıcı" olarak geçmesin.
+async function resolveUserId(req: Request): Promise<string | null> {
+  const header = req.headers.get("Authorization") ??
+    req.headers.get("authorization");
+  if (!header) return null;
+
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+  const token = match[1].trim();
+  if (!token) return null;
+
+  try {
+    const { data, error } = await serviceClient().auth.getUser(token);
+    if (error) {
+      console.error("token dogrulanamadi:", error.message);
+      return null;
+    }
+    const id = data?.user?.id;
+    return typeof id === "string" && id.length > 0 ? id : null;
+  } catch (e) {
+    console.error("token dogrulama istegi basarisiz:", e);
+    return null;
+  }
 }
 
 /// İçinde bulunulan ay, 'YYYY-MM' (UTC) — kullanim_kota.ay ile aynı biçim.
@@ -193,7 +270,7 @@ function monthlyPageCap(): number | null {
 /// üretimini kilitlemek, bir kullanıcının tavanı birkaç sayfa aşmasından daha
 /// kötü. Aynı "best-effort" yaklaşımı logUsage'da da var.
 async function isOverMonthlyCap(
-  deviceId: string,
+  userId: string,
 ): Promise<{ used: number; cap: number } | null> {
   const cap = monthlyPageCap();
   if (cap === null) return null;
@@ -202,7 +279,7 @@ async function isOverMonthlyCap(
     const { data, error } = await serviceClient()
       .from("kullanim_kota")
       .select("islenen_sayfa")
-      .eq("kullanici_id", deviceId)
+      .eq("kullanici_id", userId)
       .eq("ay", currentMonth());
     if (error) throw error;
 
@@ -220,14 +297,14 @@ async function isOverMonthlyCap(
 
 async function logUsage(
   provider: string,
-  deviceId: string,
+  userId: string,
   pageCount: number,
 ) {
   const supabase = serviceClient();
   const ay = currentMonth();
 
   const { error } = await supabase.rpc("kullanim_kota_artir", {
-    p_kullanici_id: deviceId,
+    p_kullanici_id: userId,
     p_ay: ay,
     p_saglayici: provider,
     p_artis: pageCount,

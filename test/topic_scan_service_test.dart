@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medcard/models/pdf_page.dart';
 import 'package:medcard/services/gemini_service.dart';
+import 'package:medcard/services/session_token.dart';
 import 'package:medcard/services/topic_scan_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,7 +39,12 @@ void main() {
           'SUPABASE_ANON_KEY=test-anon-key',
     );
     SharedPreferences.setMockInitialValues({});
+    // TopicScanService GeminiTransport üzerinden gidiyor; transport
+    // 2026-08-20'den beri oturum token'ı istiyor (bkz. SessionToken).
+    debugSessionAccessTokenOverride = () => 'test-access-token';
   });
+
+  tearDown(() => debugSessionAccessTokenOverride = null);
 
   TopicScanService serviceReturning(
     List<String> bodies, {

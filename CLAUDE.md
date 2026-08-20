@@ -2769,6 +2769,84 @@ her başarılı Edge Function isteğinde `kullanim_kota_artir()` RPC'siyle atomi
 artıyor. Henüz auth yok, `kullanici_id` = `DeviceIdService`'in ürettiği,
 `shared_preferences`'ta saklanan anonim UUID (kullanıcının kendi kararı,
 gerçek hesap sistemi gelince taşınacak).
+**⚠️ BU PARAGRAF 2026-08-20'de ESKİDİ — kota kimliği artık `auth.uid()`,
+bkz. hemen aşağıdaki "Kota kimliği auth.uid()'e taşındı" bölümü.**
+
+### 🔐 Kota kimliği `deviceId` → `auth.uid()` (2026-08-20, FAIL-CLOSED)
+> **KOD HAZIR, `ai-proxy` HENÜZ DEPLOY EDİLMEDİ.** Deploy komutu ve sırası
+> bu bölümün sonunda. İSTEMCİ VE FONKSİYON BİRLİKTE YAYINLANMALI.
+
+**SORUN:** `kullanim_kota.kullanici_id`'ye giden şey `DeviceIdService`'in
+ürettiği anonim UUID'ydi — kimlik DOĞRULAMASI değil. Sunucu gövdeden gelen
+string'e güveniyordu; istemci ne yazarsa oydu ve tarayıcı verisi temizlenince
+sayaç sıfırlanıyordu. Ücretli bir özelliği bu sayaca bağlamak, ödemeyi
+bypass edilebilir kılardı.
+
+**ÇÖZÜM — İKİ PARÇA, BİRİ OLMADAN DİĞERİ İŞE YARAMAZ:**
+- **Sunucu** (`ai-proxy/index.ts`): yeni `resolveUserId(req)`,
+  `Authorization: Bearer <jwt>` başlığını `serviceClient().auth.getUser(token)`
+  ile doğruluyor. Çözülemezse istek HİÇBİR sağlayıcıya gitmeden **401**.
+  `isOverMonthlyCap` ve `logUsage` artık bu `userId`'yi alıyor; gövdedeki
+  `deviceId` **kimlik amaçlı GÖRMEZDEN GELİNİYOR**.
+- **İstemci** (üç transport): `Authorization` başlığına anon key DEĞİL,
+  `SessionToken.require()` ile alınan **kullanıcı access token'ı** konuyor.
+  `apikey` başlığı anon key olarak KALIYOR (Supabase gateway'i için gerekli,
+  kimlik taşımaz).
+
+**⚠️ İKİ FAIL POLİTİKASI BİLİNÇLİ OLARAK FARKLI — birini diğerine uydurma:**
+| Kapı | Politika | Gerekçe |
+|---|---|---|
+| Kimlik doğrulama | **FAIL-CLOSED** (401) | Kimliğini kanıtlayamayan giremez |
+| Kota sorgusu | **FAIL-OPEN** (değişmedi) | Geçici DB sorunu tüm üretimi kilitlemesin |
+
+**`lib/services/session_token.dart` (YENİ):** token'ın TEK kaynağı. Üç
+transport bunu paylaşıyor ki davranışları birebir aynı kalsın — birine token
+eklenip diğerine unutulması, o sağlayıcının TÜM isteklerinin sessizce 401'e
+düşmesi demek olurdu. `debugSessionAccessTokenOverride` ile testlerde
+sabitlenir (`require_auth.dart`'taki `debugRequireAuthSignedInOverride` ile
+AYNI desen; `tearDown`'da MUTLAKA `null`'a döndür).
+Oturum yoksa `SessionToken.require()` **ağa çıkmadan** Türkçe bir
+`FlashcardGenerationException` fırlatır — sunucuya kimliksiz istek gitmez.
+
+**`deviceId` zarfta BİLİNÇLİ OLARAK BIRAKILDI:** fonksiyonun CANLIDAKİ eski
+sürümü bu alanı hâlâ ZORUNLU görüyor ve yoksa 400 dönüyor. İstemci, fonksiyon
+deploy edilmeden önce yayına girerse bu alan sayesinde çalışmaya devam eder.
+Deploy tamamlandıktan sonra kaldırılabilir (ayrı, küçük bir iş).
+
+**ESKİ `kullanim_kota` KAYITLARI ARTIK KULLANILMIYOR — KASITLI.** deviceId ile
+`auth.uid()` arasında hiçbir eşleşme tablosu YOK (hiç olmadı), yani geçmiş
+sayaçlar taşınamaz. Kullanıcılar "harcanmış kotalarını" kaybeder, yani
+**LEHLERİNE**: sayaç sıfırdan başlar, herkes o ay için tavanı yeniden kazanır.
+Geriye dönük migration GEREKMİYOR (sütun zaten `text`, UUID sorunsuz sığar).
+
+**TESTLER:** `test/transport_auth_test.dart` (YENİ, 13 test) üç transport'u
+AYNI matriste koşturuyor: geçerli oturum → Authorization kullanıcı token'ını
+taşıyor (anon key DEĞİL) · oturum yok → ağa HİÇ çıkmadan fırlatıyor · boş
+token da "oturum yok" sayılıyor · sunucu 401 dönerse yüzeye çıkıyor ve
+**yeniden DENENMİYOR** (5xx/429'un aksine — geçersiz token'ı 4 kez göndermek
+anlamsız). Mevcut 5 test dosyasına oturum override'ı eklendi
+(`gemini_service`, `glm_service`, `gemini_transport`, `glm_transport`,
+`compact_card_format`).
+**TUZAK:** `http.Response(body, status)` gövdeyi content-type'ta charset
+yoksa LATIN1 ile kodluyor — Türkçe karakterli sahte hata gövdesi testin
+KENDİSİNİ patlatır. `charset=utf-8` ver ya da ASCII gövde kullan.
+
+**`tool/` script'leri:** ağa çıkan 7 script artık gerçek token istiyor —
+`MEDKART_ACCESS_TOKEN=<jwt> flutter test tool/<script>.dart`. Token yoksa
+net bir `fail()` mesajı veriyorlar (kafa karıştırıcı 401 yerine). Token'ı
+almak için: tarayıcıda giriş yap, DevTools konsolunda
+`JSON.parse(localStorage.getItem('sb-<ref>-auth-token')).access_token`.
+
+**DEPLOY — SIRA ÖNEMLİ:**
+```
+npx supabase functions deploy ai-proxy
+```
+Fonksiyon deploy edilene kadar: yeni istemci ESKİ fonksiyonla ÇALIŞMAYA
+DEVAM EDER (eski fonksiyon Authorization'ı hiç okumuyor, `deviceId` hâlâ
+zarfta). Deploy'dan SONRA: eski bir istemci (anon key gönderen) **401 alır** —
+web'de kullanıcılar sayfayı yenileyince yeni istemciyi alacağı için pratikte
+sorun değil, ama açık sekmesi olan bir kullanıcı yenileyene kadar hata görür.
+
 **Aylık sert tavan (2026-07-31'de kodlandı, 2026-08-03'te canlıya alındı):**
 DÜZELTME — yukarıdaki "hiçbir istek reddedilmiyor (sınırsız)" artık YANLIŞ.
 `ai-proxy/index.ts` artık sağlayıcıya (Gemini/DeepSeek) gitmeden ÖNCE
@@ -3112,6 +3190,16 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   `kDebugBypassCache` 5 Ağustos'ta açık unutulup önbelleği sessizce devre dışı
   bırakmıştı; bir daha olmasın diye ikisinin de üstünde kutulu GEÇİCİ yorumu
   ve bu dosyanın en başında bir tablo var.
+- **`ai-proxy`'nin kimlik doğrulamasını fail-open'a çevirme** ("token
+  çözülemedi ama geçici bir sorun olabilir, geçir" gibi) — kimlik kapısı
+  BİLİNÇLİ olarak fail-closed (401). Yalnızca KOTA sorgusu fail-open kalır;
+  ikisi ayrı politika, birini diğerine uydurma (bkz. "Kota kimliği
+  auth.uid()'e taşındı").
+- **Transport'ların `Authorization` başlığına anon key koyma** — sunucu anon
+  JWT'sini reddeder (`sub` claim'i yok) ve TÜM istekler 401'e düşer. Token'ın
+  tek kaynağı `SessionToken.require()`; üç transport da onu kullanmalı,
+  birine ekleyip diğerine unutmak o sağlayıcıyı sessizce öldürür.
+  `apikey` başlığı ise anon key OLARAK KALMALI (gateway için).
 - GLM'de `reasoning` parametresini kaldırma ya da `exclude: true`'ya çevirme —
   `exclude` düşünmeyi kapatmaz, yalnızca gizler; tokenlar yine faturalanır ve
   maliyet ~2 katına çıkar (bkz. "GLM sağlayıcısı"). Testi de silme.

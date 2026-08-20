@@ -14,10 +14,25 @@ class AuthResult {
   final String? message;
 }
 
-/// Supabase Auth sarmalayıcısı (FAZ 1 — yalnızca iskelet).
+/// Supabase Auth sarmalayıcısı — AKTİF, iskelet DEĞİL.
 ///
-/// Zorunlu login kapısı YOK: bu servis şimdilik yalnızca Ayarlar'daki test
-/// girişinden ([AuthScreen]) kullanılıyor, anonim akış aynen sürüyor.
+/// (DÜZELTME 2026-08-20: bu yorum uzun süre "FAZ 1 — yalnızca iskelet,
+/// zorunlu login kapısı YOK, anonim akış aynen sürüyor" diyordu. ESKİMİŞTİ:
+/// kapı Faz 3'te geldi ve bugün üretimde çalışıyor.)
+///
+/// KAPI MODELİ — "bakmak serbest, yapmak üye": uygulama girişsiz açılır ve
+/// gezinme/inceleme (deste listesi, kart listesi, istatistik, ayarlar, yasal
+/// metinler) tamamen serbesttir. Yalnızca VERİ ÜRETEN / VERİ DIŞARI ÇIKARAN
+/// eylemler `requireAuth` ile sarılıdır (bkz. `lib/utils/require_auth.dart`;
+/// 18 çağrı noktası: PDF yükleme, kart üretme, deste oluşturma, çalışma,
+/// MCQ, deneme sınavı, kart düzenleme, PDF/JSON dışa-içe aktarma).
+///
+/// AYRICA — 2026-08-20'den beri kimlik yalnızca UI kapısı değil: `ai-proxy`
+/// Edge Function'ı `Authorization` başlığındaki oturum token'ını doğruluyor
+/// ve çözemezse isteği 401 ile REDDEDİYOR (fail-closed). Kota sayacı da
+/// artık cihaz kimliğine değil `auth.uid()`'e bağlı. Yani oturum, kart
+/// üretiminin ÖN KOŞULU — bkz. `lib/services/session_token.dart`.
+///
 /// Supabase `main.dart`'ta .env'deki SUPABASE_URL/ANON_KEY ile başlatılır;
 /// .env eksikse uygulama yine açılır, buradaki her işlem kibarca
 /// "yapılandırma eksik" mesajı döner ([isConfigured] false).
