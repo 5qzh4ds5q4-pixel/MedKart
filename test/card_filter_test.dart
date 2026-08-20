@@ -276,6 +276,78 @@ void main() {
     expect(find.text('Q-kolay-kalp'), findsOneWidget);
   });
 
+  // --- Zorluk çipi GÖRÜNÜRLÜĞÜ (2026-08-20) ---------------------------------
+  // Sayısı 0 olan zorluk çipi artık HİÇ çizilmiyor. Öncesinde koşulsuz
+  // (CardDifficulty.values üzerinden) çiziliyor, basılınca "Bu filtreyle kart
+  // yok" boş durumuna düşen ölü bir kontrol oluyordu. Prompt v31'den
+  // (zorlukKurali kaldırıldı) sonra yeni destelerde Kolay/Zor sürekli 0
+  // olduğu için bu kalıcı hale gelmişti.
+  // SAF GÖRÜNÜRLÜK: CardFilter mantığı/difficulty alanı/SRS değişmedi.
+
+  FlashcardStore storeWith(List<Flashcard> cards) => FlashcardStore(
+    _NoopGenerator(),
+    initialData: LibraryData(decks: [_deck], cards: cards),
+  );
+
+  testWidgets('0 kartı olan zorluk seviyesinin çipi çizilmez', (tester) async {
+    useTallSurface(tester);
+    // Fixture'da orta YOK (yalnızca zor + kolay).
+    await tester.pumpWidget(_wrap(_store()));
+
+    expect(find.widgetWithText(FilterChip, 'Zor'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'Kolay'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'Orta'), findsNothing);
+  });
+
+  testWidgets('v31 senaryosu: hepsi orta ise yalnızca Orta çipi görünür', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(
+      _wrap(
+        storeWith([
+          _c('a', CardDifficulty.orta, 'kalp'),
+          _c('b', CardDifficulty.orta, 'beyin'),
+        ]),
+      ),
+    );
+
+    expect(find.widgetWithText(FilterChip, 'Orta'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'Kolay'), findsNothing);
+    expect(find.widgetWithText(FilterChip, 'Zor'), findsNothing);
+    // "Zorluk" grup etiketi hâlâ anlamlı (en az bir çip var).
+    expect(find.text('Zorluk'), findsOneWidget);
+    // Orta çipi çalışmaya devam eder (ölü değil).
+    await tester.tap(find.widgetWithText(FilterChip, 'Orta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Q-a'), findsOneWidget);
+    expect(find.text('Q-b'), findsOneWidget);
+  });
+
+  testWidgets('seçili çipin kartları kalmayınca seçim de temizlenir', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    final store = _store();
+    await tester.pumpWidget(_wrap(store));
+
+    // "Zor" seçili: yalnızca zor kartlar kalır.
+    await tester.tap(find.widgetWithText(FilterChip, 'Zor'));
+    await tester.pumpAndSettle();
+    expect(find.text('Q-kolay-kalp'), findsNothing);
+
+    // Zor kartların ikisi de silinince o seviye 0'a düşer.
+    store.deleteCard('zor-kalp');
+    store.deleteCard('zor-beyin');
+    await tester.pumpAndSettle();
+
+    // Çip gizlendi VE filtre temizlendi — görünmeyen bir filtre aktif kalmaz;
+    // kalan kart boş durum yerine listede görünür.
+    expect(find.widgetWithText(FilterChip, 'Zor'), findsNothing);
+    expect(find.text('Bu filtreyle kart yok'), findsNothing);
+    expect(find.text('Q-kolay-kalp'), findsOneWidget);
+  });
+
   testWidgets('uyumsuz kombinasyon boş durum gösterir', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(_wrap(_store()));

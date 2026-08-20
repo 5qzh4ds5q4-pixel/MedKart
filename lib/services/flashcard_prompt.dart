@@ -39,20 +39,23 @@ import '../models/flashcard.dart';
 /// gerçekten değiştiren bir kural eklediğinde ya da değiştirdiğinde. Salt
 /// biçim/maliyet/sıralama değişikliğinde ARTIRMA.
 ///
-/// **ŞU ANKİ DEĞER NEDEN 30 (2026-08-18'de 27'den yükseltildi):** v30'da
-/// [ornekTabanliKartKurali] eklendi ve bu kural üretilen kart KÜMESİNİ
-/// değiştiriyor — tanımının yanında somut örnek verilen her kavram artık EK
-/// bir tanıma/uygulama kartı doğuruyor. v27/v28 ile üretilmiş bir kayıt bu
-/// kartları HİÇ taşımaz, yani eksik bir set servis eder.
+/// **ŞU ANKİ DEĞER NEDEN 31 (2026-08-20'de 30'dan yükseltildi):** v31'de
+/// `zorlukKurali` KALDIRILDI ve bu, kartların ETİKETİNİ değiştiriyor — v31'den
+/// önce üretilmiş kayıtlar `kolay`/`zor` etiketli kartlar taşır, v31 ise
+/// hepsini `orta` doğurur. Eski bir kaydın servis edilmesi, kullanıcıya bu
+/// kararın geri alındığı bir kart kümesi göstermek olurdu.
 ///
-/// Önceki gerekçe (tarihçe olarak duruyor): eşik 27'ye, kart metnini etkileyen
+/// Önceki gerekçeler (tarihçe olarak duruyor): eşik 30'a v30'daki
+/// [ornekTabanliKartKurali] için çekilmişti (kural üretilen kart KÜMESİNİ
+/// değiştiriyor: tanımının yanında somut örnek verilen her kavram EK bir
+/// tanıma/uygulama kartı doğuruyor); 27'ye ise kart metnini etkileyen
 /// [kaynakReferansiGizlemeKurali]'nin DOĞRU hâli v27'de geldiği için
 /// çekilmişti (v26 hatalıydı: [guncellikDiliYasagiKurali]'ndaki kaynağa atıf
 /// tavsiyesini yanlışlıkla kaldırmıştı, bkz. o kuralın TARİHÇE notu).
 ///
 /// Bu yükseltmenin BUGÜNKÜ PRATİK MALİYETİ SIFIR: canlı önbellekteki 6 kaydın
 /// en yenisi v24, yani zaten hiçbiri 27 eşiğini de geçmiyordu.
-const int kMinCacheablePromptVersion = 30;
+const int kMinCacheablePromptVersion = 31;
 
 /// `'v27'` → `27`. Sürüm yoksa/çözülemiyorsa `null` (çağıran taraf bunu "en
 /// eski" sayar). Sunucu tarafındaki `pdf-cache` fonksiyonunda AYNI mantığın
@@ -82,7 +85,14 @@ bool isCacheablePromptVersion(String? version) {
 // v30 (2026-08-18): [ornekTabanliKartKurali] eklendi — HER İKİ YOL. İÇERİK
 // kuralı: tanımın yanında somut örnek verilen kavramlarda artık EK bir
 // tanıma/uygulama kartı üretiliyor.
-const String kPromptVersion = 'v30';
+//
+// v31 (2026-08-20): `zorlukKurali` KALDIRILDI — HER İKİ YOL. İÇERİK kuralı:
+// model artık kompakt dizinin [3]. pozisyonuna HER ZAMAN "o" yazıyor, yani
+// üretilen kartların zorluk etiketi tekdüze `orta` doğuyor ve zorluk yalnızca
+// `SrsEngine.deriveDifficulty` ile çalışma performansından türetiliyor.
+// A/B ile ölçülerek karar verildi — gerekçe için kaldırılan bloğun yerindeki
+// uzun yoruma bak (bu dosyada, `ikiKatmanliCevapKurali`'nin hemen altında).
+const String kPromptVersion = 'v31';
 
 /// Klinik/patolojik konularda AI'a ek olarak senaryo-tabanlı ("sınav
 /// tipi") kart ürettiren ortak kural bloğu; hem [buildGeneralPrompt] hem
@@ -157,14 +167,39 @@ const String ikiKatmanliCevapKurali = '''
 - "cevap": açıklamalı tam cevap, yukarıdaki kurala göre (mekanizma/neden-sonuç, terimler açıklanmış, 2-4 cümle). Bu alanın uzunluğu/kalitesi "kisaCevap"tan bağımsız, HİÇ değişmesin.
 - "kisaCevap": "Kısaca cevap ne?" sorusunun net yanıtı, 3-8 kelime. "cevap"ı kısaltarak elde ETME — soruyu baştan "bu sorunun tek satırlık doğrudan yanıtı ne olurdu" diye ayrıca düşün. Tam cümle olmak zorunda değil, gereksiz kelime taşımasın.''';
 
-/// Zorluk etiketi kalibrasyonu; hem [buildGeneralPrompt] hem [buildPagePrompt]
-/// tarafından paylaşılır.
-const String zorlukKurali = '''
-ZORLUK KALİBRASYONU (komite sınavı standardına göre — ÖNCEKİ SÜRÜM BİR KADEME DÜŞÜKTÜ):
-- "kolay": YALNIZCA tek bir terimin doğrudan tanımını hatırlamayı gerektiren kartlar (ör. "virülans nedir?"). Bunlar bile gerçek komite sınavı düzeyindedir; "kolay" demek "önemsiz" demek değildir.
-- "orta": Birden fazla kavramı ilişkilendiren, bir mekanizmayı veya neden-sonuç ilişkisini açıklamayı gerektiren kartlar.
-- "zor": Bir hasta/durum senaryosu + ayırıcı tanı gerektiren, ya da bir formül/sayısal hesap gerektiren kartlar. Bunlar TUS düzeyidir.
-- İki ayrı bilgiyi yan yana koymak TEK BAŞINA "orta" için yeterli değildir; aralarında gerçek bir mekanizma/neden-sonuç ilişkisi kurulmalı, yoksa "kolay" kabul et.''';
+// ---------------------------------------------------------------------------
+// `zorlukKurali` KALDIRILDI (2026-08-20, v31). YENİDEN EKLEME — önce oku.
+//
+// KARAR: kartın zorluğu artık ÜRETİM ZAMANINDA belirlenmiyor; yalnızca
+// kullanıcının kendi çalışma performansından türetiliyor
+// (`SrsEngine.deriveDifficulty` — lapses/repetitions). Model kompakt dizinin
+// [3]. pozisyonuna HER ZAMAN sabit "o" (orta) yazar.
+//
+// GEREKÇE — kural zaten tek başına çalışmıyordu, A/B ile ölçüldü
+// (`tool/ab_sinavtipi_kurali_test.dart`, 60 gerçek çağrı, $0,67):
+//   * `sinavTipiKurali` prompt'ta VARKEN üretilen "zor" oranı %8,9;
+//     yalnızca o kural çıkarılınca %1,1 (p=0,011), `icerikKalitesiOrnegi` de
+//     çıkarılınca %0,0 (p=0,003). Yani `zorlukKurali` "zor" etiketini kendi
+//     başına hiç üretmiyordu — üretimi tamamen `sinavTipiKurali`'ne bağlıydı.
+//   * EN SERT TEST: ölçümdeki s.14, kaynağın literal FORMÜL sayfasıydı
+//     (enfektivite/patojenite/fatalite hızı formülleri) — yani kuralın tek
+//     BAĞIMSIZ dalı olan "formül/sayısal hesap" için elimizdeki en uygun
+//     zemin. Sonuç: sinavTipiKurali'li armda 2/10 "zor", kuralsız armlarda
+//     0/8 ve 0/13. En uygun zeminde bile tetiklenmedi.
+//   * Bu, 2026-08-19'daki bağımsız ölçümle örtüşüyor: 733 gerçek kartta
+//     `zor ⊂ sinav` (P(sinav|zor)=%100, beş prompt sürümünde ayrı ayrı) ve
+//     "formül/sayısal hesap" dalı 733 kartta 0 kez tetiklenmişti.
+//
+// KABUL EDİLEN SONUÇ: `CardDifficulty.parse` tanınmayan/sabit kodu `orta`ya
+// düşürdüğü için tüm yeni kartlar `orta` doğar ve `SrsEngine.initialEase`
+// hep 2.5'ten başlar (eskiden zor→2.3 / kolay→2.6). AI'ın zorluk sezgisi
+// artık SRS zamanlamasına HİÇ girmiyor — bu bilinçli bir kayıp, çünkü o
+// sezgi zaten `sinavTipiKurali`'nin gölgesiydi ve kartın 2. tekrarında
+// `deriveDifficulty` tarafından zaten üzerine yazılıyordu.
+//
+// NOT: `sinavTipiKurali` ve `icerikKalitesiOrnegi` bu adımda KALDIRILMADI —
+// onlar TUS eklentisi mimarisinin ayrı bir işi.
+// ---------------------------------------------------------------------------
 
 /// Kaynak sadakati kuralı: model kaynaktaki hatayı "düzeltmeye" çalışmasın;
 /// hem [buildGeneralPrompt] hem [buildPagePrompt] tarafından paylaşılır.
@@ -323,9 +358,7 @@ const String etiketlemeSonHatirlatmasi =
     '**SON HATIRLATMA — derinlik: Yukarıdaki temkinlilik kuralları içerik '
     'UYDURMAYI önlemek içindir, seni BASİTLEŞTİRMEYE zorlamaz. Sayfa '
     'klinik bir ilişki/tablo/sayısal veri içeriyorsa, sinavTipiKurali\'ne '
-    'göre HER biri için sınav tipi kart üretmeyi ve zorlukKurali\'ne göre '
-    'gerçek zorluk seviyesini (kolay/orta/zor karışık) uygulamayı ASLA '
-    'atlama.**';
+    'göre HER biri için sınav tipi kart üretmeyi ASLA atlama.**';
 
 /// Slayt kendi üzerinde numaralandırılmışsa o numarayı okutup "slaytNumarasi"
 /// alanına yazdıran kural; yalnızca [buildPagePrompt]'a, yalnızca görsel
@@ -360,7 +393,7 @@ SIRA:
 [0] soru — Türkçe soru metni.
 [1] kisaCevap — yukarıdaki İKİ AYRI CEVAP kuralına göre 3-8 kelimelik doğrudan yanıt.
 [2] cevap — açıklamalı tam cevap (2-4 cümle, gerekçesiyle); Türkçe yaz.
-[3] zorluk kodu — yukarıdaki ZORLUK KALİBRASYONU kuralına göre "k"=kolay, "o"=orta, "z"=zor.
+[3] zorluk kodu — HER ZAMAN "o" yaz. Bu alan artık kullanılmıyor: kartın zorluğu öğrencinin kendi tekrar performansından hesaplanıyor, senin tahmininden değil. Pozisyonu boş bırakma ya da atlama, yoksa sıra kayar.
 [4] kartTipi kodu — "s"=sinav (soru kısa bir hasta/durum senaryosuyla başlayıp oradan bilgiye geri gidiyorsa), "t"=temel (soru bilgiyi doğrudan soruyorsa).
 [5] oncelik kodu — yukarıdaki ÖNCELİK ETİKETİ kuralına göre "o"=oncelikli, "a"=arka_plan.
 [6] konu — kartın ait olduğu alt konu, 1-3 kelime (örnek: "kapaklar", "koroner dolaşım", "ileti sistemi"). Aynı alt konudaki kartlarda BİREBİR AYNI etiketi kullan; küçük harfle yaz.
@@ -372,7 +405,7 @@ DİKKAT: [3] ve [5] AYRI kod kümeleridir. "o" [3]. pozisyonda "orta", [5]. pozi
 BİÇİM ÖRNEĞİ (yalnızca biçimi göstermek için — içeriğini kopyalama):
 [
   ["Kalp kapaklarının açılıp kapanmasını sağlayan mekanizma nedir?","Odacıklar arası basınç farkı","Kapaklar kas gücüyle değil, iki odacık arasındaki basınç farkıyla pasif olarak açılıp kapanır. Basınç kapağın gerisindeki odacıkta yükseldiğinde kapak açılır, ters yönde basınç oluşunca kapanır; bu sayede kan tek yönde ilerler.","o","t","o","kapaklar",null,"false"],
-  ["55 yaşında hastada eforla artan göğüs ağrısı ve EKG'de ön duvar iskemisi saptanıyor. Hangi arterin darlığı beklenir?","Sol ön inen arter (LAD)","LAD sol ventrikülün ön duvarını ve interventriküler septumun ön bölümünü besler; bu alanın iskemisi EKG'de ön duvar derivasyonlarında değişiklik yapar. Bu nedenle ön duvar iskemisinde ilk düşünülecek damar LAD'dir.","z","s","o","koroner dolaşım","12","true"]
+  ["55 yaşında hastada eforla artan göğüs ağrısı ve EKG'de ön duvar iskemisi saptanıyor. Hangi arterin darlığı beklenir?","Sol ön inen arter (LAD)","LAD sol ventrikülün ön duvarını ve interventriküler septumun ön bölümünü besler; bu alanın iskemisi EKG'de ön duvar derivasyonlarında değişiklik yapar. Bu nedenle ön duvar iskemisinde ilk düşünülecek damar LAD'dir.","o","s","o","koroner dolaşım","12","true"]
 ]
 
 Yanıtına başka hiçbir metin, açıklama, başlık veya markdown ekleme.''';
@@ -529,8 +562,6 @@ KURALLAR:
 - Kaynakta GERÇEKTEN yeterli içerik varsa, içerdiği bilgi miktarına göre 5-20 kart üret, zorlama şişirme (sınav tipi kartlar bu sayıya dahildir; klinik ilişki sayısı fazlaysa üst sınır olarak düşünme). Bu sayı bir ALT SINIR DEĞİLDİR: kaynak eğitim içeriği değilse ya da hiçbir test edilebilir bilgi taşımıyorsa BU SAYI GEÇERLİ DEĞİLDİR — yukarıdaki kural gereği boş dizi [] döndür.
 - Soru ve cevapları Türkçe yaz.
 
-$zorlukKurali
-
 $sinavTipiKurali
 
 $icerikKalitesiOrnegi
@@ -600,7 +631,7 @@ KESİN KURALLAR:
 - ASLA inandırıcı görünen, konuyla "ilgili olabilecek" bir bilgi UYDURMA. Emin değilsen, ya da içerik gerçek bir ders materyaline benzemiyorsa, HİÇBİR KART ÜRETME — bu, yanlış bir kart üretmekten HER ZAMAN daha güvenlidir. Boş dizi döndürmek başarısızlık değildir; uydurma kart üretmek ise ciddi bir hatadır.
   Kötü örnek: Kaynakta olmayan ama "tipik ders içeriği gibi görünen" bir bilgi uydurup ondan kart üretmek (ör. tıbbi hiçbir şey içermeyen, alakasız bir el yazısı fotoğrafından "bulaşıcı hastalık kontrolü" kartı çıkarmak).
   İyi örnek: İçerik ders materyaline benzemiyorsa ya da konuyla hiç alakası yoksa boş dizi [] döndürüp hiçbir şey üretmemek.
-- ÖNEMLİ AYRIM: Yukarıdaki "emin değilsen üretme" ilkesi YALNIZCA bir kartın içeriğinin kaynakta GERÇEKTEN var olup olmadığıyla ilgilidir (uydurma riski). Bu ilke, bir kartın ZORLUĞUNU ya da TİPİNİ (sınav tipi/temel) güvenli/basit tutmak için KULLANILMAZ — sayfa gerçekten klinik/patolojik bir ilişki içeriyorsa, aşağıdaki sinavTipiKurali ve zorlukKurali TAM GÜÇLE geçerlidir, "temkinli olayım" diye düz/basit kart üretmeyi tercih etme.
+- ÖNEMLİ AYRIM: Yukarıdaki "emin değilsen üretme" ilkesi YALNIZCA bir kartın içeriğinin kaynakta GERÇEKTEN var olup olmadığıyla ilgilidir (uydurma riski). Bu ilke, bir kartın TİPİNİ (sınav tipi/temel) güvenli/basit tutmak için KULLANILMAZ — sayfa gerçekten klinik/patolojik bir ilişki içeriyorsa, aşağıdaki sinavTipiKurali TAM GÜÇLE geçerlidir, "temkinli olayım" diye düz/basit kart üretmeyi tercih etme.
 - Terminolojiyi (Latince/tıbbi/teknik) sayfadaki gibi koru.
 - $kaynakSadakatiKurali$goruntuBlogu
 
@@ -622,8 +653,6 @@ TABLO VE SAYISAL VERİ — ASLA ATLAMA:
 - Sayısal değerleri, formülleri ve normal aralıkları asla atlama — bunlar sınavda en sık sorulan bilgilerdir.
 - Bir sayfada birden fazla kart-değer bilgisi varsa hepsini işle, sadece 1-2 taneyle yetinme. Tabloda N satır varsa üretilen kart sayısını N'in altına düşürme.
 - SAYFADA BİRDEN FAZLA TABLO/BAŞLIKLI BÖLÜM VARSA HİÇBİRİNİ KOMPLE ATLAMA: sayfada iki veya daha fazla ayrı tablo ya da alt başlık varsa (ör. önce bir tablo, sonra farklı bir başlık altında ikinci bir tablo), her BÖLÜMÜ ayrı ayrı, birbirinden bağımsız bir görev gibi ele al ve her birinden en az bir kart üret. Sayfanın sonundaki/son bölümdeki bilgiye ağırlık verip başındaki/önceki bölümü tamamen atlamak KABUL EDİLEMEZ — bu, tek bir tablo içindeki satır atlamayla AYNI DERECEDE ciddi bir hatadır. Kart üretmeden önce sayfadaki tüm ayrı başlık/bölümleri say ve her birinin en az bir kartla temsil edildiğinden emin ol.
-
-$zorlukKurali
 
 $sinavTipiKurali
 

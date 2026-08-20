@@ -168,7 +168,41 @@ class _CardListScreenState extends State<CardListScreen> {
 
     final allCards = store.cardsIn(widget.deckId);
     final topics = store.topicsIn(widget.deckId);
-    final cards = _filter.isActive ? _filter.apply(allCards) : allCards;
+
+    // Zorluk çipleri: yalnızca en az 1 kartı OLAN seviyeler çizilir. Sayısı 0
+    // olan çip ölü bir kontroldü — görünüyor, basılınca "Bu filtreyle kart
+    // yok" boş durumuna düşüyordu. Prompt v31'den (zorlukKurali kaldırıldı)
+    // sonra yeni destelerde Kolay/Zor SÜREKLİ 0 olduğu için bu iki çip kalıcı
+    // olarak ölüydü; eski kartlar ve çalışma türevi kalibrasyon
+    // (`SrsEngine.deriveDifficulty`) doldurdukça kendiliğinden geri gelirler.
+    // Sıra bilinçli olarak [CardDifficulty.values] sırasını korur.
+    final availableDifficulties = [
+      for (final d in CardDifficulty.values)
+        if (allCards.any((c) => c.difficulty == d)) d,
+    ];
+
+    // Gizlenen bir çipin SEÇİMİ aktif kalmasın: görünmeyen ama etkili bir
+    // filtre, kullanıcının "neden hiç kart yok?" diye bakacağı bir kontrolü
+    // bile bulamaması demek. Sanitize edilmiş filtre hem bu build'de
+    // kullanılır hem de state'e geri yazılır — yoksa "Çalışmaya Başla"
+    // (`_startStudying`, `_filter`'ı okur) ölü filtreyle boş bir oturum açardı.
+    var effectiveFilter = _filter;
+    for (final d in _filter.difficulties) {
+      if (!availableDifficulties.contains(d)) {
+        effectiveFilter = effectiveFilter.withDifficulty(d, false);
+      }
+    }
+    if (effectiveFilter.difficulties.length != _filter.difficulties.length) {
+      // build sırasında setState çağrılamaz; bir sonraki kareye ertele.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _filter = effectiveFilter);
+      });
+    }
+
+    final cards = effectiveFilter.isActive
+        ? effectiveFilter.apply(allCards)
+        : allCards;
     // "Hocanın Favorilerini Çalış" butonu yalnızca anlamlı bir pratik oturumu
     // oluşturacak kadar (>=3) el yazısı kart varsa gösterilir.
     final handwrittenCount = allCards.where((c) => c.isHandwritten).length;
@@ -219,7 +253,8 @@ class _CardListScreenState extends State<CardListScreen> {
             : Column(
                 children: [
                   _FilterBar(
-                    filter: _filter,
+                    filter: effectiveFilter,
+                    difficulties: availableDifficulties,
                     topics: topics,
                     pageBounds: pageBounds,
                     onChanged: (f) => setState(() => _filter = f),
@@ -556,12 +591,20 @@ class _Stat extends StatelessWidget {
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.filter,
+    required this.difficulties,
     required this.topics,
     required this.pageBounds,
     required this.onChanged,
   });
 
   final CardFilter filter;
+
+  /// Çizilecek zorluk çipleri — destede EN AZ 1 kartı olan seviyeler,
+  /// [CardDifficulty.values] sırasında. Sayısı 0 olan seviye buraya hiç
+  /// girmez (bkz. çağıran taraftaki `availableDifficulties` yorumu); bu saf
+  /// bir GÖRÜNÜRLÜK kararıdır, [CardFilter] mantığına dokunmaz.
+  final List<CardDifficulty> difficulties;
+
   final List<String> topics;
 
   /// PDF'ten gelen kartların (min, max) sayfa sınırı; yoksa null (çip gizlenir).
@@ -590,9 +633,11 @@ class _FilterBar extends StatelessWidget {
             // temizleme işi "Temizle" çipinde).
             _FilterBadge(active: filter.isActive),
             const SizedBox(width: 10),
-            _groupLabel(context, 'Zorluk'),
-            const SizedBox(width: 8),
-            for (final d in CardDifficulty.values) ...[
+            if (difficulties.isNotEmpty) ...[
+              _groupLabel(context, 'Zorluk'),
+              const SizedBox(width: 8),
+            ],
+            for (final d in difficulties) ...[
               _chip(
                 context: context,
                 label: d.label,
@@ -607,13 +652,17 @@ class _FilterBar extends StatelessWidget {
               const SizedBox(width: 6),
             ],
             if (topics.isNotEmpty) ...[
-              const SizedBox(width: 4),
-              Container(
-                width: 1,
-                height: 20,
-                color: theme.colorScheme.outlineVariant,
-              ),
-              const SizedBox(width: 12),
+              // Ayraç yalnızca SOLUNDA gerçekten bir grup varken çizilir —
+              // zorluk çipleri gizlendiyse baştan gelen boş bir ayraç kalırdı.
+              if (difficulties.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: theme.colorScheme.outlineVariant,
+                ),
+                const SizedBox(width: 12),
+              ],
               _groupLabel(context, 'Konular'),
               const SizedBox(width: 8),
             ],

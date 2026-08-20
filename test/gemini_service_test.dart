@@ -42,8 +42,8 @@ void main() {
           'SUPABASE_URL=https://test.supabase.co\n'
           'SUPABASE_ANON_KEY=test-anon-key',
     );
-    // GeminiTransport artık DeviceIdService üzerinden shared_preferences
-    // okuyor (anonim cihaz kimliği); testlerde bellek-içi mock yeterli.
+    // GeminiTransport DeviceIdService üzerinden shared_preferences okuyor
+    // (zarftaki `deviceId` alanı); testlerde bellek-içi mock yeterli.
     SharedPreferences.setMockInitialValues({});
   });
 
@@ -1365,7 +1365,8 @@ void main() {
     // Ortak biçim bloğunun her satırı ikisinde de BİREBİR aynı geçmeli.
     const sharedLines = [
       '[1] kisaCevap — yukarıdaki İKİ AYRI CEVAP kuralına göre 3-8 kelimelik doğrudan yanıt.',
-      '[3] zorluk kodu — yukarıdaki ZORLUK KALİBRASYONU kuralına göre "k"=kolay, "o"=orta, "z"=zor.',
+      // v31: zorlukKurali kaldırıldı; pozisyon KORUNDU ama sabit "o" isteniyor.
+      '[3] zorluk kodu — HER ZAMAN "o" yaz.',
       '[5] oncelik kodu — yukarıdaki ÖNCELİK ETİKETİ kuralına göre "o"=oncelikli, "a"=arka_plan.',
       '[8] elYazisindanMi — yukarıdaki EL YAZISI İŞARETİ kuralına göre "true"/"false" (görsel yoksa her zaman "false").',
     ];

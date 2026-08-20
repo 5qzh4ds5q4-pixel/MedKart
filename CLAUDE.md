@@ -926,11 +926,11 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
   prompt'unda ayrı bir sınır var: "en fazla 1-2 kart temel tanım düzeyinde
   olabilir" (saf tanım/hatırlama kartı SAYISINI kısıtlar, arkaPlan
   etiketiyle karıştırılmamalı).
-- Zorluk kalibrasyonu (`_zorlukKurali`): "kolay" = tek bir terimin doğrudan
-  tanımı; "orta" = birden fazla kavramı ilişkilendiren mekanizma/neden-sonuç;
-  "zor" = hasta/durum senaryosu + ayırıcı tanı, YA DA formül/sayısal hesap
-  gerektiren (TUS düzeyi). (Tıp uzmanı geri bildirimiyle kalibre edildi,
-  değiştirmeden önce sebep sor.)
+- ~~Zorluk kalibrasyonu (`zorlukKurali`)~~ — **2026-08-20'de (v31) TAMAMEN
+  KALDIRILDI**, bkz. "`zorlukKurali` KALDIRILDI" bölümü. Model artık kompakt
+  dizinin [3]. pozisyonuna HER ZAMAN `"o"` yazıyor; zorluk yalnızca
+  `SrsEngine.deriveDifficulty` ile çalışma performansından türetiliyor.
+  Pozisyon KORUNDU (silinmedi/kaydırılmadı).
 - **Öncelik kalibrasyonu sıkılaştırıldı (2026-08-05, `oncelikKurali`):** canlı
   bir çalıştırmada 147 karttan 140'ı (%95) "oncelikli" gelmişti — ayrım
   işlevsizdi (Sınav Modu'nun gizleyecek neredeyse hiçbir şeyi yoktu). Kuralın
@@ -1039,9 +1039,150 @@ index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
     (8 test — kural metni, iki yola da girdiği, Yol A'da statik cache bloğunda
     durduğu). `kPromptVersion` v28→**v30** (v29 ATLANDI, aşağı bkz.).
 
-## ⚠️ `zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI — ÖLÇÜLDÜ, KARAR VERİLMEDİ (2026-08-19)
-> **PROMPT'A DOKUNULMADI.** Bu bölüm bir bulgu kaydıdır, uygulanmış bir
-> değişiklik değil. "Düzeltmeye" kalkmadan önce aşağıdaki v26 uyarısını oku.
+## ✅ `zorlukKurali` KALDIRILDI (2026-08-20, prompt v31) — A/B ile karar verildi
+> Aşağıdaki 2026-08-19 çakışma ölçümünün SONUCU. O bölüm "karar verilmedi"
+> diyordu; **karar verildi ve uygulandı.** Kuralı geri eklemeden önce ikisini
+> de oku.
+
+**NE YAPILDI (`lib/services/flashcard_prompt.dart`):**
+- `zorlukKurali` bloğu ve HER İKİ YOLDAKİ (`buildGeneralPrompt` +
+  `buildPageSystemInstruction`) enjeksiyonu kaldırıldı. Yerinde uzun bir
+  gerekçe yorumu duruyor — silme.
+- **Kompakt dizinin [3]. pozisyonu KORUNDU** (silinmedi/kaydırılmadı,
+  "pozisyon sabit" kuralı gereği). Talimat basitleşti: *"HER ZAMAN 'o' yaz.
+  Bu alan artık kullanılmıyor…"*. `BİÇİM ÖRNEĞİ`'ndeki `"z"` de `"o"` yapıldı
+  (yoksa örnek talimatla çelişirdi).
+- `zorlukKurali`'ye atıf yapan İKİ cümle temizlendi: `etiketlemeSonHatirlatmasi`
+  ("derinlik" hatırlatması) ve Yol A'daki "ÖNEMLİ AYRIM" maddesi.
+  **`sinavTipiKurali` atıfları KASITLI OLARAK BIRAKILDI** — o kural bu adımda
+  kaldırılmadı (TUS eklentisi mimarisinin ayrı işi).
+- `kPromptVersion` v30→**v31**, `kMinCacheablePromptVersion` 30→**31**
+  (etiket değişikliği içerik değişikliğidir: v30 kayıtları hâlâ `kolay`/`zor`
+  etiketli kart taşır, v31 hepsini `orta` doğurur).
+
+**GEREKÇE — A/B ile ölçüldü** (`tool/ab_sinavtipi_kurali_test.dart`, pakete
+dahil DEĞİL; 60 gerçek çağrı, **$0,67**, görselsiz, 3 arm × 10 sayfa × 2 tekrar):
+
+| Arm | Kart | zor | sinav tipi |
+|---|---:|---:|---:|
+| `B_v30` (o günkü üretim) | 123 | **11 (%8,9)** | %23,6 |
+| `A_sinavsiz` (yalnız `sinavTipiKurali` çıktı) | 95 | **1 (%1,1)** | %8,4 |
+| `C` (+ `icerikKalitesiOrnegi` de çıktı) | 96 | **0 (%0,0)** | %1,0 |
+
+- B vs A: p=0,011; B vs C: p=0,003 (iki oran z-testi). Tekrarlar tutarlı.
+- **EN SERT TEST — s.14 formül sayfası:** kaynağın literal formül slaydı
+  (enfektivite/patojenite/fatalite hızı), yani `zorlukKurali`'nin tek BAĞIMSIZ
+  dalı ("formül/sayısal hesap") için elimizdeki en uygun zemin.
+  **B: 2/10 zor · A: 0/8 · C: 0/13.** En uygun zeminde bile, `sinavTipiKurali`
+  olmadan kural tek bir `zor` üretemedi.
+- **Örneklem üretim kanıtıyla seçildi** (rastgele/en-uzun DEĞİL): `pdf_cache`
+  kaydı sayfa sayfa çözülüp yalnızca üretimde ZATEN `zor`/vinyet üretmiş VE
+  metni yeterli sayfalar alındı — seçilenlerde üretim zor oranı %19,7, PDF
+  geneli %8,0. Metni görselde olan yüksek-vinyet sayfalar (s.37/31/35/39)
+  bilinçli ELENDİ (görselsiz ölçümde iki arma da boş sayfa giderdi).
+- **P(sinav|zor)=%100 bu A/B'de de çıktı** (her armda istisnasız) — kapsanma
+  artık iki bağımsız veri setinde, farklı model ve prompt sürümünde doğrulanmış.
+- **YAN ÖLÇÜM — kart hacmi:** kural yokken çağrı başına kart 6,2 → 4,8
+  (**−%22**), üç armda da 0 boş çağrı. Bu, komite/TUS ayrımının ürün tarafını
+  ilgilendiriyor (ücretsiz katman ~%22 daha az kart alacak) — ama v31 TEK
+  BAŞINA bu düşüşü YAPMAZ: ölçülen düşüş `sinavTipiKurali` kaldırılan armlara
+  ait ve **o kural hâlâ prompt'ta.**
+
+**BİLİNÇLİ KABUL EDİLEN SONUÇ — `initialEase` artık hep 2.5:**
+`CardDifficulty.parse` tanınmayan/sabit kodu `orta`ya düşürdüğü için YENİ
+üretilen her kart `orta` doğuyor ve `SrsEngine.initialEase` hep 2.5'ten
+başlıyor (eskiden zor→2.3 / kolay→2.6). **AI'ın zorluk sezgisi artık SRS
+zamanlamasına HİÇ girmiyor.** Bu bir bug değil, kabul edilmiş bir kayıp: o
+sezgi ölçümde `sinavTipiKurali`'nin gölgesi çıktı ve zaten kartın 2.
+tekrarında `deriveDifficulty` tarafından üzerine yazılıyordu.
+**`initialEase`'in üç dalı da KORUNDU** — v31 ÖNCESİ kartlar ve kullanıcının
+elle ayarladığı (`difficultyManual`) kartlar hâlâ o yoldan geçiyor; switch'i
+"nasılsa hep orta" diye sadeleştirmek onların davranışını sessizce değiştirir.
+
+**NE DEĞİŞMEDİ:** `CardDifficulty` enum'u, kart listesindeki zorluk çipleri,
+`deriveDifficulty`, `difficultyManual`, `EditCardDialog`'daki elle zorluk
+ayarı, PDF export'taki zorluk dağılımı — hepsi duruyor. Değişen tek şey,
+zorluğun ÜRETİM ZAMANINDA tahmin edilmemesi.
+
+**TESTLER:** paket **734/734 yeşil**. İki test güncellendi, ikisi de sürüm
+sabitleyen testler: `ornek_tabanli_kart_kurali_test.dart` (v30→v31) ve
+`prompt_version_gate_test.dart` (eşik 30→31, `v30` artık isabet SAYILMIYOR).
+`gemini_service_test.dart`'taki ortak biçim satırı da yeni [3] talimatına
+güncellendi. **Davranışsal hiçbir test kırılmadı** — zorluk üretimini test
+eden ayrı bir test zaten yokmuş.
+
+**`flutter analyze`:** değişen 5 üretim/test dosyasında **0 uyarı**. Proje
+geneli baseline 130 → **141**; artışın TAMAMI yeni `tool/ab_sinavtipi_kurali_
+test.dart`'tan (10 `avoid_print` + 1 `invalid_use_of_visible_for_testing_member`)
+— mevcut `tool/ab_ornek_kurali_test.dart` da aynı deseni taşıyor (10 uyarı),
+yani yeni bir regresyon DEĞİL, `tool/` script'lerinin bilinen maliyeti.
+
+**✅ CANLI ÜRETİMDE DOĞRULANDI (2026-08-20, aynı gün).**
+`tool/verify_v31_test.dart` — elle prompt kurmaz, DOĞRUDAN
+`GeminiService.generateForPage`'i çağırır (yani üretimin kendi yolu:
+`buildPagePrompt` + `responseSchema` + `flashcardFromItem` çözücüsü).
+6 gerçek sayfa, **40 kart**, ölçülen maliyet **$0,0955**. Girdi: aynı bulaşıcı
+hastalıklar PDF'i (s.4 düz tanım, s.14 formül sayfası, s.17/24/27/28 klinik).
+
+| Ölçülen | Sonuç |
+|---|---|
+| Zorluk dağılımı | **kolay=0 · orta=40 · zor=0** — istisnasız |
+| Kart tipi | **sinav=9 (%22,5)** · temel=31 — `sinavTipiKurali` ÇALIŞMAYA DEVAM EDİYOR |
+| Vinyet kalitesi | Gerçek hasta senaryoları üretiliyor (paslı çivi→tetanoz, TBC damlacık bulaşı, kültür→çapraz bulaş) |
+
+Script bir ön koşul da doğruluyor: prompt'ta `ZORLUK KALİBRASYONU` YOK ama
+`SINAV TİPİ KART` VAR — yani yanlış sürüm ölçülmediği garanti.
+
+**Arayüz tarafı da doğrulandı** (`tool/verify_v31_chips_test.dart`, ağa
+çıkmaz — yukarıdaki 40 gerçek kartı `CardListScreen`'e verir):
+- Üç zorluk çipi de **ekranda duruyor** (koşulsuz çiziliyorlar, `card_list_
+  screen.dart:595`) ama "Kolay" ve "Zor" **"Bu filtreyle kart yok" boş
+  durumuna** düşüyor; yalnızca "Orta" kart gösteriyor.
+- Deste özeti metni: **"Kolay 0 · Orta 40 · Zor 0"**.
+- Bu tespit üzerine iki çip **ÖLÜ KONTROL** ilan edildi (2026-08-19'da
+  kaldırılan "Sınav Modu" switch'iyle aynı kalıp) ve **aynı gün düzeltildi** —
+  bkz. aşağıdaki "Zorluk çipleri: 0 kartlı seviye gizleniyor".
+
+## Zorluk çipleri: 0 kartlı seviye GİZLENİYOR (2026-08-20)
+`card_list_screen.dart` `_FilterBar` zorluk çiplerini artık
+`CardDifficulty.values` üzerinden KOŞULSUZ çizmiyor; yalnızca destede **en az
+1 kartı olan** seviyeler çiziliyor. **SAF GÖRÜNÜRLÜK değişikliği** —
+`CardFilter` mantığına, `difficulty` alanına ve SRS hesaplarına DOKUNULMADI.
+
+- **Kaynak liste:** `_CardListScreenState.build` içinde `availableDifficulties`
+  (`allCards` üzerinden, `CardDifficulty.values` SIRASINI koruyarak) hesaplanıp
+  `_FilterBar`'a yeni bir `difficulties` parametresiyle geçiriliyor.
+- **Gizlenen çipin SEÇİMİ de temizleniyor:** `effectiveFilter`, `_filter`'daki
+  artık mevcut olmayan zorlukları (var olan `withDifficulty(d, false)` API'siyle)
+  düşürüyor; bu build'de o kullanılıyor ve `addPostFrameCallback` ile state'e
+  geri yazılıyor. Yazma ŞART: `_startStudying` `_filter`'ı okuyor, yoksa
+  görünmeyen bir filtreyle BOŞ bir çalışma oturumu açılırdı.
+- **Grup etiketi ve ayraç da koşullu:** "Zorluk" etiketi hiç çip yoksa,
+  "Konular"dan önceki dikey ayraç da SOLUNDA grup yoksa çizilmiyor (yoksa
+  çubuğun başında sahipsiz bir ayraç kalırdı).
+- **`distributionLabel` DEĞİŞMEDİ** (bilinçli): deste özeti hâlâ
+  "Kolay 0 · Orta 40 · Zor 0" gösteriyor. O bir DAĞILIM bilgisi, tıklanabilir
+  bir kontrol değil; sıfırları göstermesi doğru.
+- **Kalıcı değil, veriye bağlı:** çipler eski (v31 öncesi) kartlar, elle
+  ayarlanmış zorluk (`difficultyManual`) ve çalışma türevi kalibrasyon
+  (`lapses>=3 → zor`, `lapses==0 && reps>=3 → kolay`) ile kendiliğinden geri
+  gelir. Yani "Zor çipi yok" = "bu destede henüz zor kart yok", "bu özellik
+  kaldırıldı" değil.
+- **Test:** `card_filter_test.dart`'a 3 test eklendi (0 kartlı seviyenin çipi
+  çizilmez / hepsi orta ise yalnızca Orta görünür ve çalışır / seçili çipin
+  kartları silinince çip gizlenir VE seçim temizlenir). Mevcut testler
+  değişmedi — fixture'da zaten `orta` kart yoktu ve "Kolay ∩ beyin = boş"
+  testi hâlâ geçiyor (kombinasyon kaynaklı boş durum korunuyor, yalnızca
+  TEK BAŞINA boş olan çip gizleniyor). Paket **734 → 737/737 yeşil**,
+  değişen iki dosyada **0 analyze uyarısı**.
+- **Canlı v31 kartlarıyla doğrulandı** (`tool/verify_v31_chips_test.dart`,
+  40 gerçek kart): önce `Kolay: true / Orta: true / Zor: true`, düzeltmeden
+  sonra **`Kolay: false / Orta: true / Zor: false`**.
+
+## ⚠️ `zorlukKurali` × `sinavTipiKurali` ÇAKIŞMASI — ÖLÇÜLDÜ (2026-08-19)
+> **DURUM (2026-08-20):** bu bölümün başlığı "KARAR VERİLMEDİ" diyordu —
+> artık verildi: `zorlukKurali` KALDIRILDI (yukarı bkz.). Aşağısı, kararın
+> dayandığı ölçümün tam kaydı olarak DEĞİŞTİRİLMEDEN duruyor.
 > Masaüstündeki tam rapor:
 > `~/Desktop/MedKart_zorluk_sinavtipi_cakisma_olcumu_2026-08-19.md`.
 
@@ -2628,7 +2769,6 @@ her başarılı Edge Function isteğinde `kullanim_kota_artir()` RPC'siyle atomi
 artıyor. Henüz auth yok, `kullanici_id` = `DeviceIdService`'in ürettiği,
 `shared_preferences`'ta saklanan anonim UUID (kullanıcının kendi kararı,
 gerçek hesap sistemi gelince taşınacak).
-
 **Aylık sert tavan (2026-07-31'de kodlandı, 2026-08-03'te canlıya alındı):**
 DÜZELTME — yukarıdaki "hiçbir istek reddedilmiyor (sınırsız)" artık YANLIŞ.
 `ai-proxy/index.ts` artık sağlayıcıya (Gemini/DeepSeek) gitmeden ÖNCE
@@ -2912,14 +3052,19 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   edilmedi (bkz. "Kart Üretim Kuralları"). **2026-08-18 A/B'si
   kuralı AKLADI** — kart fazlalığı ondan gelmiyor (%34,7 kuralsız vs %32,7
   kurallı), o yüzden "fazlalık var" gerekçesiyle kırpma.
-- **`zorlukKurali` ile `sinavTipiKurali`'ni "tutarlı hale getirmek" için
-  birini kırpma/gevşetme — kullanıcı karar vermeden prompt'a dokunma.**
-  Çakışma 2026-08-19'da ölçüldü ve TAM çıktı (`zor ⊂ sinav`, %100 kapsanma,
-  Cramér's V 0,852) ama bu bir SORUN TESPİTİ, çözüm reçetesi değil; hangi
-  davranışın istendiği ("zor" bağımsız bir eksen mi, yoksa "sinav"ın şiddet
-  kademesi mi) henüz netleşmedi. Aynı kalıptaki bir "çelişkiyi giderme"
-  girişimi v26'da YANLIŞ çıkmıştı. Bkz. "`zorlukKurali` × `sinavTipiKurali`
-  ÇAKIŞMASI" bölümü.
+- **`zorlukKurali`'ni prompt'a GERİ EKLEME** — 2026-08-20'de (v31) bilinçli
+  olarak kaldırıldı, A/B ile karar verildi (kural `sinavTipiKurali` olmadan
+  tek bir "zor" üretemiyordu; formül sayfasında bile 0/8 ve 0/13). Zorluk
+  artık yalnızca `SrsEngine.deriveDifficulty` ile çalışma performansından
+  geliyor. Kompakt dizinin [3]. pozisyonuna sabit `"o"` yazılıyor —
+  **pozisyonu silme/kaydırma.** Bkz. "`zorlukKurali` KALDIRILDI" bölümü.
+- **`SrsEngine.initialEase`'in üç dalını sadeleştirme** ("nasılsa hep orta
+  geliyor" diye) — v31 ÖNCESİ kartlar ve elle ayarlanmış (`difficultyManual`)
+  kartlar hâlâ `kolay`(2.6)/`zor`(2.3) dallarından geçiyor; sadeleştirmek
+  onların zamanlamasını sessizce değiştirir.
+- **`sinavTipiKurali`'ni "artık zorlukKurali de yok" diye kaldırma** — o
+  kural TUS eklentisi mimarisinin ayrı bir işi ve v31'de KASITLI olarak
+  bırakıldı. Kaldırılırsa çağrı başına kart sayısı ~%22 düşer (ölçüldü).
 - Zorluk ve kart tipini BAĞIMSIZ iki boyut varsayan yeni bir filtre/UI/istatistik
   tasarlama — ölçümde değiller (6 hücrenin 2'si yapısal olarak boş, zorluk
   filtresindeki "Zor" fiilen "sınav tipi" ile aynı kümeyi veriyor).

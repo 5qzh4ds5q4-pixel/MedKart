@@ -51,11 +51,14 @@ void main() {
       expect(isCacheablePromptVersion('v28'), isFalse);
       // v29 hiç yayınlanmadı (denenip geri alınan systemInstruction denemesi).
       expect(isCacheablePromptVersion('v29'), isFalse);
+      // 2026-08-20: eşik 30 -> 31 (zorlukKurali KALDIRILDI; v30 kayıtları
+      // hâlâ kolay/zor etiketli kart taşır, v31 hepsini orta doğurur).
+      expect(isCacheablePromptVersion('v30'), isFalse);
     });
 
     test('eşik ve üstü kabul edilir', () {
-      expect(isCacheablePromptVersion('v30'), isTrue);
       expect(isCacheablePromptVersion('v31'), isTrue);
+      expect(isCacheablePromptVersion('v32'), isTrue);
       expect(isCacheablePromptVersion('v999'), isTrue);
     });
 

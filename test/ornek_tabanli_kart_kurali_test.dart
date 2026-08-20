@@ -70,9 +70,12 @@ void main() {
     );
   });
 
-  test('kPromptVersion v30 (içerik kuralı değişti, sürüm artmalı)', () {
-    expect(kPromptVersion, 'v30');
+  test('kPromptVersion v31 (içerik kuralı değişti, sürüm artmalı)', () {
+    // v30'da bu dosyanın konusu olan ornekTabanliKartKurali eklenmişti.
+    // 2026-08-20'de v31 geldi (zorlukKurali KALDIRILDI) — bu kural
+    // ornekTabanliKartKurali'ni etkilemiyor, yalnızca sürüm ilerledi.
+    expect(kPromptVersion, 'v31');
     // İçerik kuralı olduğu için önbellek eşiği de bu sürüme çekildi.
-    expect(kMinCacheablePromptVersion, 30);
+    expect(kMinCacheablePromptVersion, 31);
   });
 }

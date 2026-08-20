@@ -231,12 +231,29 @@ class SrsEngine {
   /// Hiç unutulmamış kartın "kolay" sayılması için gereken en az ardışık doğru.
   static const int difficultyKolayRepetitions = 3;
 
-  /// AI'ın verdiği zorluk etiketi, kartın başlangıç kolaylık katsayısını
-  /// belirler: "zor" etiketli kart daha küçük katsayıyla başlar, yani
-  /// aralıkları daha yavaş büyür ve karşına daha sık çıkar.
+  /// Kartın zorluk etiketi, başlangıç kolaylık katsayısını belirler: "zor"
+  /// etiketli kart daha küçük katsayıyla başlar, yani aralıkları daha yavaş
+  /// büyür ve karşına daha sık çıkar.
   ///
   /// Bu yalnızca bir başlangıç tahminidir; kullanıcının kendi cevapları
   /// biriktikçe katsayı gerçek performansa göre kayar.
+  ///
+  /// ⚠️ 2026-08-20 (prompt v31) İTİBARIYLA PRATİKTE HEP 2.5 DÖNER — bu
+  /// BİLİNÇLİ ve kabul edilmiş bir sonuçtur, bug değildir. `zorlukKurali`
+  /// prompt'tan kaldırıldı (bkz. `flashcard_prompt.dart`, kaldırılan bloğun
+  /// yerindeki gerekçe yorumu); model artık kompakt dizinin [3]. pozisyonuna
+  /// her zaman "o" yazıyor, dolayısıyla YENİ üretilen her kart `orta` doğuyor
+  /// ve `kolay`(2.6)/`zor`(2.3) dalları yalnızca v31 ÖNCESİ kartlarda ve
+  /// kullanıcının elle ayarladığı ([Flashcard.difficultyManual]) kartlarda
+  /// tetikleniyor.
+  ///
+  /// Yani AI'ın zorluk sezgisi artık SRS zamanlamasına HİÇ girmiyor. Kayıp
+  /// bilinçli: o sezgi ölçümde `sinavTipiKurali`'nin gölgesi çıktı (kural
+  /// olmadan "zor" üretilemiyordu) ve zaten kartın 2. tekrarında
+  /// [deriveDifficulty] tarafından üzerine yazılıyordu.
+  ///
+  /// ÜÇ DALI DA KORU: eski kartlar ve elle ayarlanmış kartlar hâlâ bu yoldan
+  /// geçiyor; switch'i sadeleştirmek onların davranışını sessizce değiştirir.
   static double initialEase(CardDifficulty difficulty) {
     return switch (difficulty) {
       CardDifficulty.kolay => 2.6,
