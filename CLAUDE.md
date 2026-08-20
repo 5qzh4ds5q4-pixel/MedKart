@@ -2773,8 +2773,8 @@ gerçek hesap sistemi gelince taşınacak).
 bkz. hemen aşağıdaki "Kota kimliği auth.uid()'e taşındı" bölümü.**
 
 ### 🔐 Kota kimliği `deviceId` → `auth.uid()` (2026-08-20, FAIL-CLOSED)
-> **KOD HAZIR, `ai-proxy` HENÜZ DEPLOY EDİLMEDİ.** Deploy komutu ve sırası
-> bu bölümün sonunda. İSTEMCİ VE FONKSİYON BİRLİKTE YAYINLANMALI.
+> **✅ DEPLOY EDİLDİ VE CANLI DOĞRULANDI (2026-08-20).** Ayrıntı bu bölümün
+> sonunda. Kod ile canlı fonksiyon artık UYUMLU.
 
 **SORUN:** `kullanim_kota.kullanici_id`'ye giden şey `DeviceIdService`'in
 ürettiği anonim UUID'ydi — kimlik DOĞRULAMASI değil. Sunucu gövdeden gelen
@@ -2837,15 +2837,44 @@ net bir `fail()` mesajı veriyorlar (kafa karıştırıcı 401 yerine). Token'ı
 almak için: tarayıcıda giriş yap, DevTools konsolunda
 `JSON.parse(localStorage.getItem('sb-<ref>-auth-token')).access_token`.
 
-**DEPLOY — SIRA ÖNEMLİ:**
-```
-npx supabase functions deploy ai-proxy
-```
-Fonksiyon deploy edilene kadar: yeni istemci ESKİ fonksiyonla ÇALIŞMAYA
-DEVAM EDER (eski fonksiyon Authorization'ı hiç okumuyor, `deviceId` hâlâ
-zarfta). Deploy'dan SONRA: eski bir istemci (anon key gönderen) **401 alır** —
-web'de kullanıcılar sayfayı yenileyince yeni istemciyi alacağı için pratikte
-sorun değil, ama açık sekmesi olan bir kullanıcı yenileyene kadar hata görür.
+**✅ DEPLOY EDİLDİ (2026-08-20):** `npx supabase functions deploy ai-proxy`
+→ `{"project_ref":"zmwjlchbpiyjzwvkaatu","functions":["ai-proxy"],
+"message":"Deployed Functions."}`. "Docker is not running" uyarısı NORMAL —
+CLI uzaktan bundle ediyor (2026-08-17'deki `pdf-cache` deploy'unda da aynıydı).
+
+**KESİNTİ RİSKİ YOKTU — ÇÜNKÜ PRODUCTION YAYINI YOK.** Deploy öncesi
+araştırıldı: bu projede CI/CD, hosting config (`netlify.toml`/`vercel.json`/
+`firebase.json`), `package.json`, deploy script'i YOK; GitHub Pages kapalı
+(`has_pages:false`), repo `homepage` alanı boş, `build/web/` hiç oluşmamış.
+README yalnızca yerel kurulumu anlatıyor. CLAUDE.md'nin kendi launch listesi
+de bunu doğruluyor ("domain + Resend'e kayıt" hâlâ bekliyor). Yani
+"istemci ve fonksiyon birlikte yayınlanmalı" endişesi bu projede GEÇERSİZ:
+etkilenen tek istemci yerel `flutter run` oturumu, o da yeni kodu çalıştırıyor.
+**Gerçek bir hosting kurulunca bu paragraf yeniden değerlendirilmeli** —
+o zaman deploy sırası (önce istemci, sonra fonksiyon) gerçekten önem kazanır.
+
+**CANLI DOĞRULAMA — 4 senaryo, hepsi 401, hiçbiri sağlayıcıya gitmedi ($0):**
+
+| Senaryo | Sonuç | Nerede reddedildi |
+|---|---|---|
+| Sahte token | 401 `UNAUTHORIZED_INVALID_JWT_FORMAT` | Supabase **gateway** (fonksiyona ulaşmadı) |
+| **Anon key** Authorization olarak | 401 + bizim Türkçe mesajımız | **`resolveUserId`** |
+| Authorization başlığı hiç yok | 401 + bizim mesajımız | `resolveUserId` |
+| `deviceId` zarfta yok | 401 + bizim mesajımız | `resolveUserId` (kimlik kapısı ÖNCE) |
+
+**EN KRİTİK OLAN 2. SATIR:** anon key yapısal olarak geçerli bir JWT, yani
+gateway'i GEÇİYOR — onu durduran şey bizim `user.id` kontrolümüz. Savunmacı
+kontrolün tam olarak işe yaradığı yer burası. Son satır da eski
+"`deviceId` eksik → 400" zorunluluğunun kalktığını ve kimlik kapısının
+ondan ÖNCE çalıştığını gösteriyor.
+
+**⚠️ POZİTİF YOL CANLI DOĞRULANMADI:** geçerli bir kullanıcı token'ıyla 200
+dönüp dönmediği test EDİLMEDİ (elde gerçek oturum yoktu). Bu önemsiz bir
+boşluk değil — `resolveUserId` her şeyi reddedecek şekilde bozuk olsaydı
+yukarıdaki dört test yine AYNI sonucu verir, ama kart üretimi tamamen ölmüş
+olurdu. 13 birim testi bunu dışlıyor, yine de canlıda ölçülmedi.
+Doğrulamak için: uygulamayı yerelde aç, giriş yap, tek sayfalık bir PDF
+yükle — kart geliyorsa pozitif yol çalışıyor.
 
 **Aylık sert tavan (2026-07-31'de kodlandı, 2026-08-03'te canlıya alındı):**
 DÜZELTME — yukarıdaki "hiçbir istek reddedilmiyor (sınırsız)" artık YANLIŞ.
