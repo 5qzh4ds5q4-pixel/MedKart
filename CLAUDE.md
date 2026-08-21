@@ -2862,19 +2862,104 @@ o zaman deploy sırası (önce istemci, sonra fonksiyon) gerçekten önem kazan�
 | Authorization başlığı hiç yok | 401 + bizim mesajımız | `resolveUserId` |
 | `deviceId` zarfta yok | 401 + bizim mesajımız | `resolveUserId` (kimlik kapısı ÖNCE) |
 
-**EN KRİTİK OLAN 2. SATIR:** anon key yapısal olarak geçerli bir JWT, yani
-gateway'i GEÇİYOR — onu durduran şey bizim `user.id` kontrolümüz. Savunmacı
-kontrolün tam olarak işe yaradığı yer burası. Son satır da eski
-"`deviceId` eksik → 400" zorunluluğunun kalktığını ve kimlik kapısının
-ondan ÖNCE çalıştığını gösteriyor.
+**EN KRİTİK OLAN 2. SATIR:** anon key gateway'i GEÇİYOR — onu durduran şey
+bizim `user.id` kontrolümüz. Savunmacı kontrolün tam olarak işe yaradığı yer
+burası. Son satır da eski "`deviceId` eksik → 400" zorunluluğunun kalktığını
+ve kimlik kapısının ondan ÖNCE çalıştığını gösteriyor.
 
-**⚠️ POZİTİF YOL CANLI DOĞRULANMADI:** geçerli bir kullanıcı token'ıyla 200
-dönüp dönmediği test EDİLMEDİ (elde gerçek oturum yoktu). Bu önemsiz bir
-boşluk değil — `resolveUserId` her şeyi reddedecek şekilde bozuk olsaydı
-yukarıdaki dört test yine AYNI sonucu verir, ama kart üretimi tamamen ölmüş
-olurdu. 13 birim testi bunu dışlıyor, yine de canlıda ölçülmedi.
-Doğrulamak için: uygulamayı yerelde aç, giriş yap, tek sayfalık bir PDF
-yükle — kart geliyorsa pozitif yol çalışıyor.
+**🔴 DÜZELTME (2026-08-21) — "anon key yapısal olarak geçerli bir JWT"
+İDDİASI YANLIŞTI.** Bu satır önceden anon key'in gateway'i "JWT gibi
+göründüğü için" geçtiğini söylüyordu. `.env`'deki `SUPABASE_ANON_KEY`
+ölçüldü: **46 karakter, `sb_publishable_…` biçimi — JWT DEĞİL** (üç parçalı
+base64 yapısı yok). Sonuç (2. satır) doğru, GEREKÇE yanlıştı. Üç senaryonun
+gerçek mekanizması, `index.ts` okunarak netleştirildi:
+
+| Senaryo | Gateway ne yapıyor | `resolveUserId` ne yapıyor |
+|---|---|---|
+| Sahte token (`Bearer sahte.token.degeri`) | **REDDEDİYOR** — JWT'ye benzeyen ama geçerli olmayan bir string; `UNAUTHORIZED_INVALID_JWT_FORMAT`. Fonksiyon HİÇ ÇALIŞMIYOR. | çalışmıyor |
+| Anon key Authorization olarak | **GEÇİRİYOR** — çünkü bu projenin GERÇEK publishable API anahtarı; gateway'in görmek istediği şey tam olarak bu. | `auth.getUser(token)` bir KULLANICI çözemiyor (publishable key bir kullanıcı token'ı değil, `sub` claim'i taşımıyor) → `error` → **null → 401** |
+| Authorization başlığı yok | **GEÇİRİYOR** — yetki `apikey` başlığındaki publishable key'den geliyor. | `req.headers.get("Authorization")` null → **ağa hiç çıkmadan erken dönüş → null → 401** |
+
+Yani gateway "JWT mi?" diye bakmıyor; **"bu projeye ait geçerli bir anahtar
+mı?"** diye bakıyor. Anon key bu testi geçiyor — geçmesi de doğru, uç noktayı
+çağırabilmenin koşulu o. Anon key'in taşımadığı şey **kullanıcı kimliği**;
+onu yakalayan tek yer `resolveUserId`. Ders: gateway bir KİMLİK kapısı değil,
+bir PROJE anahtarı kapısı. Kullanıcı kimliğini yalnızca bizim kodumuz
+doğruluyor — bu yüzden `resolveUserId`'yi fail-open'a çevirmek kapıyı
+tamamen açar.
+
+**Ayrıca dikkat:** 2. ve 3. satır aynı 401'i döndürüyor ama farklı yollardan
+— 2'de gerçek bir `auth.getUser` ağ çağrısı yapılıp başarısız oluyor, 3'te
+başlık hiç olmadığı için ağa çıkılmadan erken dönülüyor
+(`index.ts:223`). Cevap gövdesi aynı olduğu için ikisini yalnızca
+yanıta bakarak ayırt edemezsin; ayrım fonksiyon loglarında
+(`token dogrulanamadi:`) görünür.
+
+**✅ POZİTİF YOL CANLI DOĞRULANDI (2026-08-21).** Bu satır 20 Ağustos'ta
+"DOĞRULANMADI" diyordu; o boşluk artık KAPANDI. Boşluk önemsiz değildi:
+`resolveUserId` HER ŞEYİ reddedecek şekilde bozuk olsaydı yukarıdaki dört
+negatif test yine AYNI sonucu verirdi, ama kart üretimi tamamen ölmüş olurdu.
+Yani negatif testler tek başına "kapı çalışıyor" demeye YETMİYORDU.
+
+**GERÇEK OTP GİRİŞİ** (magic link değil, üretimdeki akışın kendisi):
+`POST /auth/v1/otp` → 200 (kod e-postaya gitti) → `POST /auth/v1/verify` →
+200, gerçek bir `auth.uid()` çözüldü (UUID buraya YAZILMADI — repo public,
+kimlik bilgisi olmasa da gereksiz). Dönen access token
+`MEDKART_ACCESS_TOKEN` ile script'e verildi.
+
+**Script: `tool/verify_pozitif_yol_test.dart`** (pakete dahil DEĞİL). İki
+aşamalı, çünkü tek başına "kart geldi" HTTP durumunu kanıtlamaz:
+- **AŞAMA 1 — ham HTTP:** `ai-proxy`'ye doğrudan POST → **literal HTTP 200**,
+  gövdede `candidates` var. Negatif testlerdeki üç 401'in tam tersi, AYNI uç
+  noktada.
+- **AŞAMA 2 — üretim yolu:** `GeminiService.generateForPage` (yani
+  `buildPagePrompt` + `responseSchema` + `flashcardFromItem` çözücüsü) →
+  **15 GERÇEK KART**.
+
+**GİRDİ BİLEREK BENZERSİZ SEÇİLDİ:** rastgele bir damga taşıyan, elle
+üretilmiş tek sayfalık bir hipertansiyon PDF'i kullanıldı. Sebep: önbellekten
+servis edilen bir sonuç `ai-proxy`'ye HİÇ uğramaz ve testi ANLAMSIZ kılardı.
+Ölçüm bunu doğruluyor: `[USAGE s.1] girdi=5858 cache=YOK çıktı=2005`.
+Yani gerçek bir API çağrısı — maliyet ≈ **$0,027**.
+
+| Ölçülen | Sonuç |
+|---|---|
+| Ham HTTP | **200** (+ `candidates` gövdede) |
+| Kart sayısı | **15**, hepsi `sourcePage=1`, soru/cevap dolu |
+| Zorluk dağılımı | **kolay=0 · orta=15 · zor=0** — v31 canlıda İKİNCİ kez teyit |
+| Kart tipi | **sinav=4 (%26,7)** · temel=11 — `sinavTipiKurali` çalışıyor |
+| `elYazisindanMi` | **15/15 false** — görselsiz yolda olması gerektiği gibi |
+
+Örnek kartlar (kalite kanıtı olarak, üretim çıktısından birebir):
+- **K7 (temel):** *"İkincil hipertansiyona yol açan renal ve endokrin kaynaklı
+  nedenler nelerdir?"* → `Renal arter stenozu, feokromositoma, Conn, Cushing`
+- **K14 (sinav):** *"30 yaşında kadın hastada dirençli hipertansiyon
+  saptanıyor. Yapılan tetkiklerde renal arter darlığı ve tek taraflı adrenal
+  kitle (Conn sendromu şüphesi) düşünülüyor. Bu durum genel olarak hangi
+  hipertansiyon grubuna girer?"* → `İkincil (sekonder) hipertansiyon`
+  — gerçek bir hasta vinyeti, tanım tekrarı değil.
+
+**⚠️ KAPSAM SINIRI — bu doğrulama NEYİ KAPSAMIYOR:**
+1. **GÖRSELSİZ ölçüldü.** pdf.js canvas'ı tarayıcıda çalıştığı için bu
+   ortamda sayfa görüntüsü render edilemedi. Kimlik kapısı görselden
+   BAĞIMSIZ (`Authorization` başlığı iki yolda da aynı), ama üretimin
+   VARSAYILANI görselli yoldur (`_hasHandwriting = true`) ve o yol canlı
+   ölçülmedi.
+2. **TARAYICI ARAYÜZÜ AYRI DOĞRULANMADI.** Chrome uzantısı o oturumda bağlı
+   değildi; PDF sürükle-bırakla yüklenip `PdfImportScreen` çalışırken
+   GÖRÜLMEDİ. Doğrulanan şey KİMLİK + ÜRETİM ZİNCİRİ, arayüz değil.
+   Arayüz tarafı için `requireAuth` kapısı ve `SessionToken` birim testleri
+   var (13 test), ama uçtan uca ekran akışı hâlâ gözle görülmedi.
+
+**YAN GÖZLEM — `guncellikDiliYasagiKurali` × `kaynakReferansiGizlemeKurali`
+kapsam ayrımı CANLIDA DOĞRU ÇALIŞTI.** İki kural v27'den beri "CANLI
+ÖLÇÜLMEDİ" diye duruyordu. Bu çalıştırmada kart 1-5 *"Slayta göre" /
+"Slaytta belirtildiği üzere"* dedi, kart 6-15 DEMEDİ. Ayrım rastgele değil:
+1-5 kan basıncı SINIFLANDIRMA EŞİKLERİ (kılavuzla değişen bilgi — ACC/AHA
+2017'de 140/90 → 130/80 oldu), 6-15 ise mekanizma/anatomi (stabil bilgi).
+Yani modelin çizdiği sınır, v27'de tanımlanan ayrım ölçütüyle ÖRTÜŞÜYOR.
+Tek çalıştırmalık bir gözlem, istatistik değil — ama ayrımın işlediğine dair
+ilk canlı kanıt.
 
 **Aylık sert tavan (2026-07-31'de kodlandı, 2026-08-03'te canlıya alındı):**
 DÜZELTME — yukarıdaki "hiçbir istek reddedilmiyor (sınırsız)" artık YANLIŞ.
@@ -3224,11 +3309,16 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   BİLİNÇLİ olarak fail-closed (401). Yalnızca KOTA sorgusu fail-open kalır;
   ikisi ayrı politika, birini diğerine uydurma (bkz. "Kota kimliği
   auth.uid()'e taşındı").
-- **Transport'ların `Authorization` başlığına anon key koyma** — sunucu anon
-  JWT'sini reddeder (`sub` claim'i yok) ve TÜM istekler 401'e düşer. Token'ın
-  tek kaynağı `SessionToken.require()`; üç transport da onu kullanmalı,
-  birine ekleyip diğerine unutmak o sağlayıcıyı sessizce öldürür.
-  `apikey` başlığı ise anon key OLARAK KALMALI (gateway için).
+- **Transport'ların `Authorization` başlığına anon key koyma** — anon key
+  gateway'i GEÇER (o kapı "geçerli proje anahtarı mı?" diye bakar, anon key
+  de tam olarak odur) ama `resolveUserId` ondan bir KULLANICI çözemez, o
+  yüzden TÜM istekler 401'e düşer. **Anon key bir JWT DEĞİL** —
+  `sb_publishable_…` biçiminde, 46 karakter (2026-08-21'de ölçüldü; bu
+  dosyada uzun süre "yapısal olarak geçerli bir JWT" diye YANLIŞ yazıyordu,
+  bkz. "Kota kimliği auth.uid()'e taşındı" bölümündeki düzeltme tablosu).
+  Token'ın tek kaynağı `SessionToken.require()`; üç transport da onu
+  kullanmalı, birine ekleyip diğerine unutmak o sağlayıcıyı sessizce
+  öldürür. `apikey` başlığı ise anon key OLARAK KALMALI (gateway için).
 - GLM'de `reasoning` parametresini kaldırma ya da `exclude: true`'ya çevirme —
   `exclude` düşünmeyi kapatmaz, yalnızca gizler; tokenlar yine faturalanır ve
   maliyet ~2 katına çıkar (bkz. "GLM sağlayıcısı"). Testi de silme.
