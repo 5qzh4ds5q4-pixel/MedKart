@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -71,6 +72,69 @@ void main() {
         expect(
           PdfCacheService.hashBytes(bytes, includeImages: false),
           PdfCacheService.hashBytes(bytes, includeImages: false),
+        );
+      });
+
+      // ── tusSuffix (2026-08-21) ────────────────────────────────────────
+      // TUS-only üretim HENÜZ YOK; bu grup yalnızca sonek ÜRETİMİNİN doğru
+      // çalıştığını ve mevcut anahtarları BOZMADIĞINI sabitler.
+
+      test('tusOnly varsayilan false — parametre eklenmeden onceki anahtar '
+          'BIREBIR ayni kalir (mevcut cache kayitlari erisilebilir)', () {
+        expect(
+          PdfCacheService.hashBytes(bytes),
+          sha256.convert(bytes).toString(),
+        );
+        expect(
+          PdfCacheService.hashBytes(bytes, tusOnly: false),
+          PdfCacheService.hashBytes(bytes),
+        );
+        expect(
+          PdfCacheService.hashBytes(bytes, includeImages: false),
+          '${sha256.convert(bytes)}${PdfCacheService.noVisionSuffix}',
+        );
+      });
+
+      test('TUS anahtari = duz ozet + tusSuffix', () {
+        final plain = PdfCacheService.hashBytes(bytes);
+        expect(
+          PdfCacheService.hashBytes(bytes, tusOnly: true),
+          '$plain${PdfCacheService.tusSuffix}',
+        );
+      });
+
+      test('TUS anahtari komite (TUS olmayan) anahtardan FARKLIDIR — ayni '
+          'PDF birbirinin kaydini ezmez', () {
+        expect(
+          PdfCacheService.hashBytes(bytes, tusOnly: true),
+          isNot(PdfCacheService.hashBytes(bytes, tusOnly: false)),
+        );
+      });
+
+      test('tusOnly ve includeImages BAGIMSIZ — dort kombinasyon dort AYRI '
+          'raf uretir', () {
+        final keys = {
+          PdfCacheService.hashBytes(bytes),
+          PdfCacheService.hashBytes(bytes, includeImages: false),
+          PdfCacheService.hashBytes(bytes, tusOnly: true),
+          PdfCacheService.hashBytes(bytes, includeImages: false, tusOnly: true),
+        };
+        expect(keys.length, 4);
+      });
+
+      test('sonek SIRASI sabit: once novision, sonra tus — sira degisirse '
+          'o ana kadar yazilmis TUM kayitlar erisilemez olur', () {
+        final plain = PdfCacheService.hashBytes(bytes);
+        expect(
+          PdfCacheService.hashBytes(bytes, includeImages: false, tusOnly: true),
+          '$plain${PdfCacheService.noVisionSuffix}${PdfCacheService.tusSuffix}',
+        );
+      });
+
+      test('TUS anahtari deterministiktir', () {
+        expect(
+          PdfCacheService.hashBytes(bytes, tusOnly: true),
+          PdfCacheService.hashBytes(bytes, tusOnly: true),
         );
       });
 

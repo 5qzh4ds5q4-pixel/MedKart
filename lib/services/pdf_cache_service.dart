@@ -64,6 +64,18 @@ class PdfCacheService {
   /// servis edilebiliyordu.
   static const String noVisionSuffix = ':novision';
 
+  /// TUS-only üretimin cache anahtarına eklenen ayırt edici sonek.
+  /// [noVisionSuffix] ile AYNI deseni izler; ikisi bağımsızdır ve birlikte
+  /// de kullanılabilir (bkz. [hashBytes]'taki sabit ekleme sırası).
+  ///
+  /// ⚠️ 2026-08-21 itibarıyla HENÜZ HİÇBİR YERDE KULLANILMIYOR — TUS-only
+  /// üretim yok. Bu, ileriye dönük bir RAF AYRIMI: o üretim başladığında
+  /// aynı PDF hash'i komite modunun kaydını EZMESİN diye altyapı önceden
+  /// hazırlandı. `hashBytes(..., tusOnly: true)` çağrısı eklemeden önce
+  /// TUS üretiminin gerçekten farklı kartlar ürettiğinden emin ol; aksi
+  /// halde raf ayırmak yalnızca gereksiz yeniden üretim maliyeti demektir.
+  static const String tusSuffix = ':tus';
+
   /// [bytes] içeriğinin SHA-256 hex özeti — dosya ADINDAN bağımsız, yalnızca
   /// içerik bazlı (aynı PDF farklı isimle yüklense de aynı hash'i üretir).
   ///
@@ -72,9 +84,26 @@ class PdfCacheService {
   /// geriye dönük uyumlu. `false` (görsel kapalı) özete [noVisionSuffix]
   /// ekler; böylece görselsiz üretilmiş sonuçlar kendi ayrı rafında kalır,
   /// iki mod birbirinin sonucunu asla ezmez/servis etmez.
-  static String hashBytes(Uint8List bytes, {bool includeImages = true}) {
+  ///
+  /// [tusOnly] aynı mantığın TUS-only üretim için olanı ([tusSuffix]).
+  /// Varsayılan `false` — bugün hiçbir çağıran `true` GÖNDERMİYOR, yani
+  /// üretilen anahtarlar bu parametre eklenmeden ÖNCEKİYLE BİREBİR AYNI
+  /// kalır (mevcut cache kayıtları bulunmaya devam eder).
+  ///
+  /// SONEK SIRASI SABİTTİR ve değiştirilemez: önce [noVisionSuffix], sonra
+  /// [tusSuffix]. Sırayı değiştirmek ya da araya sonek sıkıştırmak, o ana
+  /// kadar yazılmış TÜM kayıtları erişilemez kılar (anahtar bir string
+  /// karşılaştırması, yapı değil). Yeni bir boyut gerekirse SONA ekle.
+  static String hashBytes(
+    Uint8List bytes, {
+    bool includeImages = true,
+    bool tusOnly = false,
+  }) {
     final digest = sha256.convert(bytes).toString();
-    return includeImages ? digest : '$digest$noVisionSuffix';
+    final buffer = StringBuffer(digest);
+    if (!includeImages) buffer.write(noVisionSuffix);
+    if (tusOnly) buffer.write(tusSuffix);
+    return buffer.toString();
   }
 
   /// [hash] önbellekte varsa üretilmiş kartları (+ HIT sayacını) döner;
