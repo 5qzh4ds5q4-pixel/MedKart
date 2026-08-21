@@ -835,6 +835,43 @@ istemez — sourcePage orada zaten her zaman null, değişmedi. Model okuyamazsa
 (görsel yok, sayı basılı değil, emin değil) sessizce eski davranışa (fiziksel
 index) düşülür — hiçbir geriye dönük uyumluluk sorunu yok.
 
+## Deste kaynak PDF kimliği (2026-08-21) — YALNIZCA YAZILIYOR
+`Deck.sourcePdfHash` (String?) + `Deck.sourcePdfName` (String?). PDF'in
+KENDİSİNİ değil KİMLİĞİNİ saklar. Amaç ileriye dönük: TUS eklentisi
+tetiklendiğinde "kullanıcı doğru PDF'i mi seçti?" karşılaştırması.
+**İKİ ALAN DA ŞU AN HİÇBİR YERDE OKUNMUYOR** — karşılaştırma mantığı ve UI
+ayrı bir adımda gelecek. "Ölü kod" diye temizlemeye kalkma.
+
+- **Damga NEREDE vuruluyor:** `AddCardsScreen` deste OLUŞTURMUYOR
+  (`widget.deckId` ile var olan desteye kart ekler; deste
+  `DeckActions.create` → `FlashcardStore.createDeck(name)` ile PDF
+  seçilmeden ÖNCE doğar). Bu yüzden damga, PDF içe aktarıldığı ANDA o
+  desteye vuruluyor — hem normal hem cache-HIT yolunda.
+- **Damga SONEKSİZ düz SHA-256** (`hashBytes(bytes)`), cache anahtarı
+  DEĞİL. `:novision`/`:tus` bir RAF adresidir; aynı PDF görselli/görselsiz
+  işlense de AYNI belgedir. Damga belgeyi tanımlamalı, rafı değil — aksi
+  halde ileriki karşılaştırma görsel ayarına göre yanlış negatif verir.
+- **İLK PDF KAZANIR** (`FlashcardStore.stampDeckSourcePdf`): deste zaten
+  damgalıysa sessizce hiçbir şey yapmaz. Bir desteye birden fazla PDF
+  eklenebilir ve tek alan bunu temsil edemez; destenin KÖKENİNİ kaydetmek,
+  son eklenene göre sessizce değişen bir değerden daha kararlı. Politika
+  model katmanında DEĞİL store'da — `Deck.withSourcePdf` koşulsuz yazar.
+- **⚠️ DÜŞME TUZAKLARI (alan eklemek tek başına YETMİYORDU):**
+  `Deck.copyWith` ve `Deck.withExamDate` yeni `Deck` inşa ediyor — yeni
+  alanlar oraya eklenmeseydi HER yeniden adlandırmada ve HER sınav tarihi
+  ayarında damga sessizce düşerdi. `SyncService._mergeDecks` aynı sorunu
+  taşıyordu; `examDate`'in "boş olan taraf diğerinden alır" kuralı kaynak
+  PDF'e de uygulandı, yoksa bulut senkronu damgayı yutardı (iki alan
+  bağımsız, aynı birleşmede birlikte dolabilir). Üçü de testle kilitli —
+  `Deck`'e YENİ bir alan eklersen bu üç yeri de güncelle.
+- **Geriye dönük uyumlu:** `LibraryCodec` zaten `toJson`/`fromJson`
+  üzerinden gidiyor, yani yedekleme/bulut senkronu/yerel depolama alanları
+  otomatik taşıyor. Eski kayıtlarda anahtarlar HİÇ YOK → null, migration
+  GEREKMİYOR. Boş/whitespace string de null'a indirgenir ("kimliği var" gibi
+  davranmasın).
+- Test: `deck_test.dart` +7, `flashcard_store_test.dart` +6,
+  `sync_service_test.dart` +3. Paket 734 → **772/772 yeşil**.
+
 ## Kart Üretim Kuralları (`gemini_service.dart`'taki ortak kural bloklarıyla doğrulandı)
 - "Sayfadaki HER tabloyu satır satır işle" kuralı yalnızca **Yol A**'nın
   sayfa prompt'unda (`_buildPagePrompt`, "TABLO VE SAYISAL VERİ" bloğu) var;
@@ -2395,6 +2432,20 @@ beslendiğini koru.
   gerekmedi. Sunucu/Edge Function DEĞİŞMEDİ (hash onun için opak bir
   string). `hit_count` sayacı da raf bazına ayrıştı (beklenen yan etki).
   Test: `pdf_cache_service_test.dart` "includeImages" grubu (5 test).
+- **`:tus` raf soneki (2026-08-21, HENÜZ KULLANILMIYOR):** `hashBytes`'a
+  `tusOnly` parametresi (varsayılan `false`) + `PdfCacheService.tusSuffix`
+  (`':tus'`) eklendi — `noVisionSuffix` deseninin birebir aynısı. Amaç
+  ileriye dönük: TUS-only üretim başladığında aynı PDF hash'i komite modunun
+  kaydını EZMESİN. **Bugün HİÇBİR ÇAĞIRAN `tusOnly: true` GÖNDERMİYOR**, yani
+  üretilen anahtarlar değişiklikten öncekiyle BİREBİR AYNI ve canlıdaki cache
+  kayıtları bulunmaya devam ediyor (testle sabitlendi).
+  **⚠️ SONEK SIRASI SABİT: önce `:novision`, sonra `:tus`.** Anahtar bir
+  string karşılaştırması, yapı DEĞİL — sırayı değiştirmek ya da araya sonek
+  sıkıştırmak o ana kadar yazılmış TÜM kayıtları erişilemez kılar. Yeni bir
+  boyut gerekirse SONA ekle. Dört kombinasyon dört AYRI raf üretir.
+  `tusOnly: true` göndermeden önce TUS üretiminin gerçekten FARKLI kartlar
+  ürettiğinden emin ol; aksi halde raf ayırmak yalnızca gereksiz yeniden
+  üretim maliyeti demektir. Test: aynı grupta +6 test (18 → 23).
 - **Cache HIT sayacı (`hit_count`, 2026-07-27):** `pdf_cache` tablosuna
   `hit_count integer not null default 0` sütunu + atomik
   `pdf_cache_hit_artir(p_hash)` RPC'si eklendi (migration
@@ -3282,6 +3333,15 @@ kullanıcının tüm kütüphanesi (desteler+kartlar+SM-2+studyLog, mevcut
   (kapsamlar ayrık, bkz. "Konu ön-taraması (`TopicScanService`)"). Modeli
   değiştirirsen `thinkingConfig` guard'ının da AYNI sabite baktığından emin ol,
   yoksa flash-lite'a thinkingConfig gidip her istek 400 döner.
+- **`pdf_cache` sonek SIRASINI değiştirme / araya sonek sıkıştırma** —
+  sıra `:novision` → `:tus` olarak sabit; anahtar bir string, sırayı bozmak
+  o ana kadar yazılmış TÜM kayıtları erişilemez kılar. Yeni boyut SONA
+  eklenir (bkz. "Maliyet Optimizasyonu").
+- **`Deck.sourcePdfHash`/`sourcePdfName`'i "kullanılmıyor" diye silme** —
+  bilinçli olarak yalnızca YAZILIYOR, TUS eklentisi için (bkz. "Deste
+  kaynak PDF kimliği"). `Deck`'e yeni alan eklersen `copyWith`,
+  `withExamDate` VE `SyncService._mergeDecks`'i de güncelle, yoksa alan
+  sessizce düşer.
 - PDF önbelleğini (`pdf_cache`) sayfa aralığı/konu ile daraltılmış
   çalıştırmalar için kullanma/yazma — yalnızca TÜM PDF işlendiğinde geçerli
   (bilinçli kapsam sınırı, bkz. "Maliyet Optimizasyonu").
