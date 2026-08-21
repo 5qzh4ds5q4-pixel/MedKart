@@ -122,6 +122,35 @@ class FlashcardStore extends ChangeNotifier {
     return deck;
   }
 
+  /// [deckId] destesini kaynak PDF kimliğiyle damgalar (bkz.
+  /// [Deck.sourcePdfHash]).
+  ///
+  /// **İLK PDF KAZANIR:** deste ZATEN damgalıysa hiçbir şey yapmaz. Sebep:
+  /// bir desteye birden fazla PDF eklenebilir ve tek alan bunu temsil
+  /// edemez; destenin KÖKENİNİ kaydetmek, en son eklenene göre sessizce
+  /// değişen bir değerden daha kararlı. Değiştirmeden önce
+  /// [Deck.sourcePdfHash]'i OKUYAN bir yer olup olmadığına bak —
+  /// 2026-08-21 itibarıyla yok, o yüzden bu politika bugün risksiz.
+  ///
+  /// [hash] DÜZ (soneksiz) içerik özeti olmalı — cache anahtarı değil.
+  /// Boş/eksik değerlerde sessizce hiçbir şey yapmaz.
+  void stampDeckSourcePdf(String deckId, {String? hash, String? name}) {
+    final cleanHash = hash?.trim();
+    if (cleanHash == null || cleanHash.isEmpty) return;
+
+    final index = _decks.indexWhere((d) => d.id == deckId);
+    if (index == -1) return;
+    if (_decks[index].hasSourcePdf) return;
+
+    final cleanName = name?.trim();
+    _decks[index] = _decks[index].withSourcePdf(
+      hash: cleanHash,
+      name: (cleanName == null || cleanName.isEmpty) ? null : cleanName,
+    );
+    _persist();
+    notifyListeners();
+  }
+
   void renameDeck(String deckId, String name) {
     final index = _decks.indexWhere((d) => d.id == deckId);
     if (index == -1) return;

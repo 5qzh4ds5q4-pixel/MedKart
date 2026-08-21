@@ -465,4 +465,72 @@ void main() {
       expect(info.cardCount, 5);
     });
   });
+
+  // stampDeckSourcePdf: alan HENÜZ HİÇBİR YERDE OKUNMUYOR (TUS eklentisi
+  // ayrı bir adım). Burada sabitlenen şey POLİTİKA: ilk PDF kazanır.
+  group('stampDeckSourcePdf', () {
+    Deck deck() => Deck(id: 'd1', name: 'Deste', createdAt: _now);
+
+    test('damgasiz desteyi damgalar', () {
+      final store = _storeWithDecks([deck()], const []);
+
+      store.stampDeckSourcePdf('d1', hash: 'abc', name: 'a.pdf');
+
+      expect(store.deckById('d1')!.sourcePdfHash, 'abc');
+      expect(store.deckById('d1')!.sourcePdfName, 'a.pdf');
+    });
+
+    test('ILK PDF KAZANIR — zaten damgali desteyi EZMEZ', () {
+      final store = _storeWithDecks([deck()], const []);
+
+      store.stampDeckSourcePdf('d1', hash: 'ilk', name: 'ilk.pdf');
+      store.stampDeckSourcePdf('d1', hash: 'ikinci', name: 'ikinci.pdf');
+
+      expect(store.deckById('d1')!.sourcePdfHash, 'ilk');
+      expect(store.deckById('d1')!.sourcePdfName, 'ilk.pdf');
+    });
+
+    test('bos/eksik hash sessizce yok sayilir', () {
+      final store = _storeWithDecks([deck()], const []);
+
+      store.stampDeckSourcePdf('d1', hash: null, name: 'a.pdf');
+      store.stampDeckSourcePdf('d1', hash: '   ', name: 'a.pdf');
+
+      expect(store.deckById('d1')!.hasSourcePdf, isFalse);
+    });
+
+    test('bos ad null olur ama hash yine damgalanir', () {
+      final store = _storeWithDecks([deck()], const []);
+
+      store.stampDeckSourcePdf('d1', hash: 'abc', name: '  ');
+
+      expect(store.deckById('d1')!.sourcePdfHash, 'abc');
+      expect(store.deckById('d1')!.sourcePdfName, isNull);
+    });
+
+    test('olmayan deste id sessizce yok sayilir', () {
+      final store = _storeWithDecks([deck()], const []);
+
+      store.stampDeckSourcePdf('yok', hash: 'abc', name: 'a.pdf');
+
+      expect(store.deckById('d1')!.hasSourcePdf, isFalse);
+    });
+
+    test('damga desteyi baska yonden BOZMAZ', () {
+      final store = _storeWithDecks([
+        Deck(
+          id: 'd1',
+          name: 'Deste',
+          createdAt: _now,
+          examDate: DateTime(2026, 9, 1),
+        ),
+      ], const []);
+
+      store.stampDeckSourcePdf('d1', hash: 'abc', name: 'a.pdf');
+
+      final updated = store.deckById('d1')!;
+      expect(updated.name, 'Deste');
+      expect(updated.examDate, DateTime(2026, 9, 1));
+    });
+  });
 }

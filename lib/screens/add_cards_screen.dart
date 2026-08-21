@@ -167,6 +167,22 @@ class _AddCardsScreenState extends State<AddCardsScreen> {
     // — görselsiz üretilmiş zayıf sonuç, görsel isteyen kullanıcıya sessizce
     // servis edilmesin. Aynı hash aşağıda save tarafına da (pdfHash) gider.
     final hash = PdfCacheService.hashBytes(bytes, includeImages: _hasHandwriting);
+
+    // Destenin KAYNAK PDF KİMLİĞİ — cache anahtarından AYRI ve bilinçli
+    // olarak SONEKSİZ (bkz. Deck.sourcePdfHash). `hash` bir cache RAFI
+    // adresidir; aynı PDF görselli/görselsiz işlendiğinde farklı olur, ama
+    // belge AYNI belgedir. Damga belgeyi tanımlamalı, rafı değil.
+    //
+    // 2026-08-21: yalnızca YAZILIYOR, hiçbir yerde okunmuyor — ileride TUS
+    // eklentisinde "doğru PDF mi?" karşılaştırması için. Deste zaten
+    // damgalıysa store bunu sessizce yok sayar (ilk PDF kazanır).
+    final documentHash = PdfCacheService.hashBytes(bytes);
+    context.read<FlashcardStore>().stampDeckSourcePdf(
+      widget.deckId,
+      hash: documentHash,
+      name: name,
+    );
+
     final cached = await _pdfCache.lookup(hash);
     if (cached != null && cached.cards.isNotEmpty) {
       if (!mounted) return;

@@ -183,4 +183,53 @@ void main() {
       expect(merged.studyLog.countOn(DateTime(2026, 7, 22)), 2);
     });
   });
+
+  // Kaynak PDF damgasi bulut senkronunda SESSIZCE DUSMEMELI — examDate ile
+  // ayni "bos olan taraf digerinden alir" kurali.
+  group('SyncService.mergeLibraries — kaynak PDF damgasi', () {
+    Deck deck({String id = 'd1', String? hash, String? pdfName, DateTime? exam}) =>
+        Deck(
+          id: id,
+          name: 'Deste',
+          createdAt: DateTime(2026, 7, 1),
+          examDate: exam,
+          sourcePdfHash: hash,
+          sourcePdfName: pdfName,
+        );
+
+    test('yalnizca uzakta olan damga birlesmede KORUNUR', () {
+      final local = LibraryData(decks: [deck()]);
+      final remote = LibraryData(
+        decks: [deck(id: 'd2', hash: 'abc', pdfName: 'a.pdf')],
+      );
+
+      final merged = SyncService.mergeLibraries(local, remote);
+
+      expect(merged.decks.single.sourcePdfHash, 'abc');
+      expect(merged.decks.single.sourcePdfName, 'a.pdf');
+    });
+
+    test('lokalde zaten damga varsa uzaktaki EZMEZ', () {
+      final local = LibraryData(decks: [deck(hash: 'lokal', pdfName: 'l.pdf')]);
+      final remote = LibraryData(
+        decks: [deck(id: 'd2', hash: 'uzak', pdfName: 'u.pdf')],
+      );
+
+      final merged = SyncService.mergeLibraries(local, remote);
+
+      expect(merged.decks.single.sourcePdfHash, 'lokal');
+    });
+
+    test('examDate ve damga AYNI birlesmede birlikte dolabilir', () {
+      final local = LibraryData(decks: [deck()]);
+      final remote = LibraryData(
+        decks: [deck(id: 'd2', hash: 'abc', exam: DateTime(2026, 9, 1))],
+      );
+
+      final merged = SyncService.mergeLibraries(local, remote);
+
+      expect(merged.decks.single.sourcePdfHash, 'abc');
+      expect(merged.decks.single.examDate, DateTime(2026, 9, 1));
+    });
+  });
 }

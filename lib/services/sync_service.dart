@@ -175,8 +175,21 @@ class SyncService {
         return;
       }
       remap[deck.id] = existing.id;
-      if (!existing.hasExamDate && deck.hasExamDate) {
-        survivorsByName[deck.name] = existing.withExamDate(deck.examDate);
+      // "Boş olan taraf diğerinden alır" — iki alan da bağımsız uygulanır,
+      // ikisi aynı birleşmede dolabilir. sourcePdf'i atlarsak bulut
+      // senkronu damgayı SESSİZCE DÜŞÜRÜRDÜ (bkz. Deck.sourcePdfHash).
+      var survivor = existing;
+      if (!survivor.hasExamDate && deck.hasExamDate) {
+        survivor = survivor.withExamDate(deck.examDate);
+      }
+      if (!survivor.hasSourcePdf && deck.hasSourcePdf) {
+        survivor = survivor.withSourcePdf(
+          hash: deck.sourcePdfHash,
+          name: deck.sourcePdfName,
+        );
+      }
+      if (!identical(survivor, existing)) {
+        survivorsByName[deck.name] = survivor;
       }
     }
 

@@ -68,4 +68,96 @@ void main() {
 
     expect(restored.examDate, isNull);
   });
+
+  // ── sourcePdfHash / sourcePdfName (2026-08-21) ───────────────────────
+  // ALANLAR HENÜZ HİÇBİR YERDE OKUNMUYOR (TUS eklentisi ayrı bir adım).
+  // Bu grup yalnızca alanların TAŞINDIĞINI ve eski kayıtları BOZMADIĞINI
+  // sabitler — özellikle copyWith/withExamDate'in onları DÜŞÜRMEDİĞİNİ.
+
+  group('kaynak PDF kimliği', () {
+    Deck stamped() => Deck(
+      id: 'd1',
+      name: 'Deste',
+      createdAt: createdAt,
+      sourcePdfHash: 'abc123',
+      sourcePdfName: 'bulasici.pdf',
+    );
+
+    test('varsayılan olarak boş — mevcut desteler etkilenmez', () {
+      final deck = Deck(id: 'd1', name: 'Deste', createdAt: createdAt);
+
+      expect(deck.sourcePdfHash, isNull);
+      expect(deck.sourcePdfName, isNull);
+      expect(deck.hasSourcePdf, isFalse);
+    });
+
+    test('toJson/fromJson iki alanı da taşır', () {
+      final restored = Deck.fromJson(stamped().toJson());
+
+      expect(restored.sourcePdfHash, 'abc123');
+      expect(restored.sourcePdfName, 'bulasici.pdf');
+      expect(restored.hasSourcePdf, isTrue);
+    });
+
+    test('ESKİ kayıtlar (anahtarlar hiç yok) null döner — geriye dönük '
+        'uyumlu, migration gerekmez', () {
+      final restored = Deck.fromJson({
+        'id': 'd1',
+        'name': 'Eski deste',
+        'createdAt': createdAt.toIso8601String(),
+      });
+
+      expect(restored.sourcePdfHash, isNull);
+      expect(restored.sourcePdfName, isNull);
+      expect(restored.hasSourcePdf, isFalse);
+      expect(restored.name, 'Eski deste');
+    });
+
+    test('boş/whitespace string null a indirgenir — "kimliği var" gibi '
+        'davranmasın', () {
+      final restored = Deck.fromJson({
+        'id': 'd1',
+        'name': 'Deste',
+        'createdAt': createdAt.toIso8601String(),
+        'sourcePdfHash': '   ',
+        'sourcePdfName': '',
+      });
+
+      expect(restored.sourcePdfHash, isNull);
+      expect(restored.hasSourcePdf, isFalse);
+    });
+
+    test('copyWith(name:) kaynak PDF kimliğini DÜŞÜRMEZ', () {
+      final renamed = stamped().copyWith(name: 'Yeni ad');
+
+      expect(renamed.name, 'Yeni ad');
+      expect(renamed.sourcePdfHash, 'abc123');
+      expect(renamed.sourcePdfName, 'bulasici.pdf');
+    });
+
+    test('withExamDate kaynak PDF kimliğini DÜŞÜRMEZ', () {
+      final withExam = stamped().withExamDate(DateTime(2026, 9, 1));
+
+      expect(withExam.examDate, DateTime(2026, 9, 1));
+      expect(withExam.sourcePdfHash, 'abc123');
+      expect(withExam.sourcePdfName, 'bulasici.pdf');
+    });
+
+    test('withSourcePdf diğer alanları KORUR', () {
+      final base = Deck(
+        id: 'd1',
+        name: 'Deste',
+        createdAt: createdAt,
+        examDate: DateTime(2026, 9, 1),
+      );
+
+      final result = base.withSourcePdf(hash: 'xyz', name: 'a.pdf');
+
+      expect(result.id, 'd1');
+      expect(result.name, 'Deste');
+      expect(result.createdAt, createdAt);
+      expect(result.examDate, DateTime(2026, 9, 1));
+      expect(result.sourcePdfHash, 'xyz');
+    });
+  });
 }
